@@ -1,6 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 
-import { createDraftArticle } from "../repositories/articleRepository";
+import {
+  createDraftArticle,
+  findArticleById,
+  updateArticleStatus
+} from "../repositories/articleRepository";
 import { findMagazineById } from "../repositories/magazineRepository";
 
 interface CreateArticleBody {
@@ -63,6 +67,118 @@ export async function createArticleHandler(
     });
 
     res.status(201).json(article);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function submitArticleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const articleId =
+      typeof req.params.articleId === "string"
+        ? req.params.articleId.trim()
+        : "";
+
+    if (!articleId) {
+      res.status(400).json({ error: "Article id is required" });
+      return;
+    }
+
+    const article = await findArticleById(articleId);
+    if (!article) {
+      res.status(404).json({ error: "Article not found" });
+      return;
+    }
+
+    if (article.author_user_id !== req.user.id) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    if (article.status !== "draft") {
+      res.status(409).json({ error: "Only draft articles can be submitted" });
+      return;
+    }
+
+    const updated = await updateArticleStatus(article.id, "submitted", null);
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function publishArticleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const articleId =
+      typeof req.params.articleId === "string"
+        ? req.params.articleId.trim()
+        : "";
+
+    if (!articleId) {
+      res.status(400).json({ error: "Article id is required" });
+      return;
+    }
+
+    const article = await findArticleById(articleId);
+    if (!article) {
+      res.status(404).json({ error: "Article not found" });
+      return;
+    }
+
+    if (article.author_user_id !== req.user.id) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    if (article.status !== "submitted") {
+      res.status(409).json({ error: "Only submitted articles can be published" });
+      return;
+    }
+
+    const magazine = await findMagazineById(article.magazine_id);
+    if (!magazine) {
+      res.status(404).json({ error: "Magazine not found" });
+      return;
+    }
+
+    const matchesScope =
+      article.topic_id === magazine.primary_topic_id &&
+      article.language_id === magazine.primary_language_id;
+
+    if (!matchesScope) {
+      const updated = await updateArticleStatus(article.id, "rejected", null);
+      res.status(400).json({
+        error: "Article does not match magazine scope",
+        article: updated
+      });
+      return;
+    }
+
+    const publishedAt = new Date().toISOString();
+    const updated = await updateArticleStatus(
+      article.id,
+      "published",
+      publishedAt
+    );
+    res.json(updated);
   } catch (error) {
     next(error);
   }

@@ -10,6 +10,17 @@ export interface CreateDraftArticleInput {
   body: string;
 }
 
+export interface ArticleLifecycleRecord {
+  id: string;
+  magazine_id: string;
+  author_user_id: string;
+  language_id: string;
+  topic_id: string;
+  status: "draft" | "submitted" | "published" | "rejected" | "archived";
+  created_at: string;
+  published_at: string | null;
+}
+
 export async function createDraftArticle(
   input: CreateDraftArticleInput
 ): Promise<Article> {
@@ -75,4 +86,54 @@ export async function createDraftArticle(
   } finally {
     client.release();
   }
+}
+
+export async function findArticleById(
+  id: string
+): Promise<ArticleLifecycleRecord | null> {
+  const result = await pool.query<ArticleLifecycleRecord>(
+    `
+    SELECT
+      id,
+      magazine_id,
+      author_user_id,
+      language_id,
+      topic_id,
+      status,
+      created_at,
+      published_at
+    FROM articles
+    WHERE id = $1
+    `,
+    [id]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function updateArticleStatus(
+  id: string,
+  status: ArticleLifecycleRecord["status"],
+  publishedAt: string | null
+): Promise<ArticleLifecycleRecord> {
+  const result = await pool.query<ArticleLifecycleRecord>(
+    `
+    UPDATE articles
+    SET status = $2,
+        published_at = $3
+    WHERE id = $1
+    RETURNING
+      id,
+      magazine_id,
+      author_user_id,
+      language_id,
+      topic_id,
+      status,
+      created_at,
+      published_at
+    `,
+    [id, status, publishedAt]
+  );
+
+  return result.rows[0];
 }
