@@ -9,6 +9,32 @@ export interface CreateMagazineInput {
   owner_user_id: string;
 }
 
+export interface MagazineLookup {
+  id: string;
+  owner_user_id: string;
+  primary_topic_id: string;
+  primary_language_id: string;
+}
+
+export async function findMagazineById(
+  id: string
+): Promise<MagazineLookup | null> {
+  const result = await pool.query<MagazineLookup>(
+    `
+    SELECT
+      id,
+      owner_user_id,
+      primary_topic_id,
+      primary_language_id
+    FROM magazines
+    WHERE id = $1
+    `,
+    [id]
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function createMagazine(
   input: CreateMagazineInput
 ): Promise<Magazine> {
@@ -43,4 +69,25 @@ export async function createMagazine(
   );
 
   return result.rows[0];
+}
+
+export async function listActiveMagazines(): Promise<Magazine[]> {
+  const result = await pool.query<Magazine>(
+    `
+    SELECT
+      id,
+      title,
+      description,
+      primary_topic_id,
+      primary_language_id,
+      owner_user_id,
+      status,
+      created_at
+    FROM magazines
+    WHERE status = 'active'
+    ORDER BY created_at DESC
+    `
+  );
+
+  return result.rows;
 }

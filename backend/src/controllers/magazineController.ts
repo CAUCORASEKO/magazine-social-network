@@ -1,7 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 
 import { findLanguageById } from "../repositories/languageRepository";
-import { createMagazine } from "../repositories/magazineRepository";
+import {
+  createMagazine,
+  listActiveMagazines
+} from "../repositories/magazineRepository";
 import { findTopicById } from "../repositories/topicRepository";
 
 interface CreateMagazineBody {
@@ -83,6 +86,24 @@ export async function createMagazineHandler(
       return;
     }
 
+    next(error);
+  }
+}
+
+export async function listMagazinesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const magazines = await listActiveMagazines();
+    res.json(magazines);
+  } catch (error) {
     next(error);
   }
 }
