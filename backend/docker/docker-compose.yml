@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: magazine_postgres
+    environment:
+      POSTGRES_USER: magazine
+      POSTGRES_PASSWORD: magazine
+      POSTGRES_DB: magazine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
