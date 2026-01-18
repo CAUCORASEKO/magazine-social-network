@@ -21,6 +21,21 @@ export interface ArticleLifecycleRecord {
   published_at: string | null;
 }
 
+export interface PublishedArticleSummary {
+  id: string;
+  magazine_id: string;
+  author_user_id: string;
+  language_id: string;
+  topic_id: string;
+  status: "published";
+  published_at: string;
+  title: string;
+}
+
+export interface PublishedArticleDetail extends PublishedArticleSummary {
+  body: string;
+}
+
 export async function createDraftArticle(
   input: CreateDraftArticleInput
 ): Promise<Article> {
@@ -136,4 +151,68 @@ export async function updateArticleStatus(
   );
 
   return result.rows[0];
+}
+
+export async function listPublishedArticlesByMagazine(
+  magazineId: string
+): Promise<PublishedArticleSummary[]> {
+  const result = await pool.query<PublishedArticleSummary>(
+    `
+    SELECT
+      a.id,
+      a.magazine_id,
+      a.author_user_id,
+      a.language_id,
+      a.topic_id,
+      a.status,
+      a.published_at,
+      av.title
+    FROM articles a
+    JOIN article_versions av
+      ON av.article_id = a.id
+     AND av.version_number = (
+       SELECT MAX(version_number)
+       FROM article_versions
+       WHERE article_id = a.id
+     )
+    WHERE a.magazine_id = $1
+      AND a.status = 'published'
+    ORDER BY a.published_at DESC
+    `,
+    [magazineId]
+  );
+
+  return result.rows;
+}
+
+export async function getPublishedArticleById(
+  articleId: string
+): Promise<PublishedArticleDetail | null> {
+  const result = await pool.query<PublishedArticleDetail>(
+    `
+    SELECT
+      a.id,
+      a.magazine_id,
+      a.author_user_id,
+      a.language_id,
+      a.topic_id,
+      a.status,
+      a.published_at,
+      av.title,
+      av.body
+    FROM articles a
+    JOIN article_versions av
+      ON av.article_id = a.id
+     AND av.version_number = (
+       SELECT MAX(version_number)
+       FROM article_versions
+       WHERE article_id = a.id
+     )
+    WHERE a.id = $1
+      AND a.status = 'published'
+    `,
+    [articleId]
+  );
+
+  return result.rows[0] ?? null;
 }

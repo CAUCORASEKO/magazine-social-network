@@ -4,7 +4,10 @@ import {
   createMagazineHandler,
   listMagazinesHandler
 } from "../controllers/magazineController";
-import { createArticleHandler } from "../controllers/articleController";
+import {
+  createArticleHandler,
+  listPublishedArticlesHandler
+} from "../controllers/articleController";
 import { authStub } from "../middleware/authStub";
 
 export const magazinesRouter = Router();
@@ -15,4 +18,8 @@ magazinesRouter.post(
   "/magazines/:magazineId/articles",
   authStub,
   createArticleHandler
+);
+magazinesRouter.get(
+  "/magazines/:magazineId/articles",
+  listPublishedArticlesHandler
 );

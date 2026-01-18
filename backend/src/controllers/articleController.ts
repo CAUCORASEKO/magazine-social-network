@@ -3,6 +3,8 @@ import type { Request, Response, NextFunction } from "express";
 import {
   createDraftArticle,
   findArticleById,
+  getPublishedArticleById,
+  listPublishedArticlesByMagazine,
   updateArticleStatus
 } from "../repositories/articleRepository";
 import { findMagazineById } from "../repositories/magazineRepository";
@@ -179,6 +181,63 @@ export async function publishArticleHandler(
       publishedAt
     );
     res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listPublishedArticlesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const magazineId =
+      typeof req.params.magazineId === "string"
+        ? req.params.magazineId.trim()
+        : "";
+
+    if (!magazineId) {
+      res.status(400).json({ error: "Magazine id is required" });
+      return;
+    }
+
+    const magazine = await findMagazineById(magazineId);
+    if (!magazine) {
+      res.status(404).json({ error: "Magazine not found" });
+      return;
+    }
+
+    const articles = await listPublishedArticlesByMagazine(magazineId);
+    res.json(articles);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPublishedArticleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const articleId =
+      typeof req.params.articleId === "string"
+        ? req.params.articleId.trim()
+        : "";
+
+    if (!articleId) {
+      res.status(400).json({ error: "Article id is required" });
+      return;
+    }
+
+    const article = await getPublishedArticleById(articleId);
+    if (!article) {
+      res.status(404).json({ error: "Article not found" });
+      return;
+    }
+
+    res.json(article);
   } catch (error) {
     next(error);
   }
