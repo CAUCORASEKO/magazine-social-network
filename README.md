@@ -1,83 +1,110 @@
 # Magazine Social Network
 
-Magazine Social Network is a text-first, multilingual social platform focused on professional long-form writing, editorial integrity, and high-quality reading experiences.
+## Overview
 
-The platform is designed for professionals, researchers, students, and subject-matter experts who want to publish structured written content without the noise, virality pressure, or visual overload common in mainstream social networks.
+Magazine Social Network is a text-first, multilingual editorial platform for professional long-form writing. It provides structured publishing channels with strict topic and language scope to support serious, focused reading and writing.
 
----
+It is designed for professionals, researchers, and subject-matter experts who need a place to publish long-form analysis without the incentives and noise of engagement-driven social networks.
 
-## Core Principles
+It intentionally avoids images and video, viral mechanics, anonymous posting, and short-form content.
 
-- **Text-first**: No photos or videos in the initial stage.
-- **Reading-focused**: Designed to encourage deep reading, not scrolling.
-- **Editorial structure**: Content is organized into topic-specific channels (“Magazines”).
-- **Professional identity**: Real user profiles with optional editorial aliases.
-- **Multilingual by design**: Global platform with language-aware content discovery.
+## Core Concepts
 
----
+- User: A real identity with name, email, and professional background. Users author articles and own magazines.
+- Magazine: An editorial channel with exactly one primary topic and one primary language. Each magazine defines a strict scope.
+- Article: Long-form text content that belongs to a magazine and inherits its scope. Articles follow an explicit lifecycle.
+- Topic: A controlled taxonomy used to define magazine scope.
+- Language: Explicit content language used for scope and discovery, separate from UI language.
 
-## Content Model
+## Editorial Model
 
-### Magazines (Channels)
+- One topic per magazine.
+- One language per magazine.
+- Articles inherit topic and language from their magazine.
+- Articles that do not match scope are rejected.
 
-Each user can create one or more editorial channels called *Magazines*.
+## Article Lifecycle
 
-- Each Magazine has a **strict primary topic** (e.g. Geopolitics, IT, Science).
-- Each Magazine has a **primary language**.
-- All published articles must match both the topic and language of the Magazine.
+- Draft: Private working state.
+- Submitted: Ready for scope checks and publication.
+- Published: Visible to readers.
+- Rejected: Blocked due to scope mismatch or policy violation.
 
-Articles that do not match the Magazine scope are automatically blocked and reviewed.
+Explicit lifecycle states make moderation and editorial decisions transparent and auditable. They also prevent implicit or hidden transitions.
 
----
+## API Overview
 
-### Articles
+- POST /magazines
+- GET /magazines
+- POST /magazines/:magazineId/articles
+- POST /articles/:articleId/submit
+- POST /articles/:articleId/publish
 
-Articles are long-form written pieces with rich text capabilities:
+## Example API Calls
 
-- Title and subtitle
-- Structured paragraphs
-- Emphasis (bold, highlights, callouts)
-- Controlled color usage
-- Vector diagrams (planned)
+Create a magazine:
+```bash
+curl -X POST http://localhost:3000/magazines \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: <user-id>" \
+  -d '{
+    "title": "Research Notes",
+    "description": "Applied research and long-form analysis",
+    "primary_topic_id": "<topic-id>",
+    "primary_language_id": "<language-id>"
+  }'
+```
 
----
+List magazines:
+```bash
+curl -X GET http://localhost:3000/magazines \
+  -H "x-user-id: <user-id>"
+```
 
-## User Identity
+Create a draft article:
+```bash
+curl -X POST http://localhost:3000/magazines/<magazine-id>/articles \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: <user-id>" \
+  -d '{
+    "title": "On sovereign debt and policy risk",
+    "body": "Long-form content goes here."
+  }'
+```
 
-- Users register with **real personal information** (name, email, professional background).
-- Users may publish under an **editorial alias** within a Magazine.
-- Account verification is planned as a future feature.
+Submit an article:
+```bash
+curl -X POST http://localhost:3000/articles/<article-id>/submit \
+  -H "x-user-id: <user-id>"
+```
 
----
+Publish an article:
+```bash
+curl -X POST http://localhost:3000/articles/<article-id>/publish \
+  -H "x-user-id: <user-id>"
+```
 
-## Interaction Model
+## Tech Stack
 
-- Comments, reactions, and private messages are **opt-in per Magazine**.
-- Authors maintain control over engagement.
-- The platform prioritizes discussion quality over engagement volume.
+- Node.js
+- TypeScript
+- Express
+- PostgreSQL
 
----
+## Project Status & Roadmap
 
-## Language Support
+Implemented:
+- Domain model and database schema
+- Magazine creation and listing
+- Draft article creation
+- Article lifecycle endpoints (submit, publish)
+- Development auth stub (header-based)
 
-- UI language is configurable per user.
-- Each article is published in a single, explicit language.
-- Content discovery prioritizes languages selected by the reader.
-- Automatic translation is optional and planned for later stages.
-
----
-
-## What This Platform Is Not
-
-- Not a short-form social network
-- Not an image or video platform
-- Not optimized for viral content
-- Not anonymous or engagement-driven
-
----
-
-## Project Status
-
-This repository represents the **early-stage design and architecture planning** of the platform.
-
-Implementation details, technical stack decisions, and infrastructure design will evolve incrementally.
+Not implemented yet:
+- Real authentication
+- Authorization roles and permissions
+- Editorial review tools
+- Comments or messaging
+- Media support
+- Translation or multilingual content tooling
+- Frontend application
