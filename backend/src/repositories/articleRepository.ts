@@ -36,6 +36,15 @@ export interface PublishedArticleDetail extends PublishedArticleSummary {
   body: string;
 }
 
+export interface PublicArticleFeedItem {
+  id: string;
+  title: string;
+  published_at: string;
+  magazine_id: string;
+  topic_id: string;
+  language_id: string;
+}
+
 export async function createDraftArticle(
   input: CreateDraftArticleInput
 ): Promise<Article> {
@@ -182,6 +191,86 @@ export async function listPublishedArticlesByMagazine(
     [magazineId]
   );
 
+  return result.rows;
+}
+
+export async function listPublishedArticles(): Promise<PublishedArticleSummary[]> {
+  const result = await pool.query<PublishedArticleSummary>(
+    `
+    SELECT
+      a.id,
+      a.magazine_id,
+      a.author_user_id,
+      a.language_id,
+      a.topic_id,
+      a.status,
+      a.published_at,
+      av.title
+    FROM articles a
+    JOIN article_versions av
+      ON av.article_id = a.id
+     AND av.version_number = (
+       SELECT MAX(version_number)
+       FROM article_versions
+       WHERE article_id = a.id
+     )
+    WHERE a.status = 'published'
+    ORDER BY a.published_at DESC
+    `
+  );
+
+  return result.rows;
+}
+
+export async function listPublishedArticlesFeed(params: {
+  languageCode?: string;
+  topicId?: string;
+  limit: number;
+  offset: number;
+}): Promise<PublicArticleFeedItem[]> {
+  const { languageCode, topicId, limit, offset } = params;
+
+  const conditions: string[] = ["a.status = 'published'"];
+  const values: unknown[] = [];
+  let idx = 1;
+
+  if (languageCode) {
+    conditions.push(`l.code = $${idx++}`);
+    values.push(languageCode);
+  }
+
+  if (topicId) {
+    conditions.push(`a.topic_id = $${idx++}`);
+    values.push(topicId);
+  }
+
+  values.push(limit);
+  values.push(offset);
+
+  const query = `
+    SELECT
+      a.id,
+      av.title,
+      a.published_at,
+      a.magazine_id,
+      a.topic_id,
+      a.language_id
+    FROM articles a
+    JOIN article_versions av
+      ON av.article_id = a.id
+     AND av.version_number = (
+       SELECT MAX(version_number)
+       FROM article_versions
+       WHERE article_id = a.id
+     )
+    JOIN languages l ON l.id = a.language_id
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY a.published_at DESC
+    LIMIT $${idx++}
+    OFFSET $${idx}
+  `;
+
+  const result = await pool.query<PublicArticleFeedItem>(query, values);
   return result.rows;
 }
 

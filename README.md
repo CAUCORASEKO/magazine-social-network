@@ -1,46 +1,78 @@
 # Magazine Social Network
 
-## Overview
+## Project Overview
 
-Magazine Social Network is a text-first, multilingual editorial platform for professional long-form writing. It provides structured publishing channels with strict topic and language scope to support serious, focused reading and writing.
+Magazine Social Network is a text-first, multilingual editorial platform for professional long-form writing. It prioritizes editorial integrity, focused reading, and real identities over engagement mechanics.
 
-It is designed for professionals, researchers, and subject-matter experts who need a place to publish long-form analysis without the incentives and noise of engagement-driven social networks.
+What it is:
+- A structured publishing backend for topic- and language-scoped magazines.
+- A system for long-form articles with explicit lifecycle states.
+- A foundation for public reading and professional identity profiles.
 
-It intentionally avoids images and video, viral mechanics, anonymous posting, and short-form content.
+What it is not:
+- A social network with likes, feeds, or virality.
+- A short-form or media-heavy platform.
+- An anonymous publishing system.
 
-## Core Concepts
+Core principles:
+- Text-first: writing and reading are the product.
+- Editorial integrity: topic and language scope is enforced.
+- Multilingual by design: content language is explicit and first-class.
+
+## Architecture Overview
+
+The backend is a Node.js + TypeScript Express API backed by PostgreSQL. The application uses a simple layered structure: routes map to controllers, controllers coordinate validation and flow, and repositories encapsulate SQL access.
+
+Why versioned articles exist:
+- Articles are long-form and iterative; versioning preserves history and supports editorial review without overwriting content.
+
+Why topic + language scope is enforced:
+- Each magazine defines its editorial scope, and articles inherit that scope. This enforces consistency and prevents drift, keeping publications coherent for readers and editors.
+
+## Domain Model
 
 - User: A real identity with name, email, and professional background. Users author articles and own magazines.
-- Magazine: An editorial channel with exactly one primary topic and one primary language. Each magazine defines a strict scope.
-- Article: Long-form text content that belongs to a magazine and inherits its scope. Articles follow an explicit lifecycle.
-- Topic: A controlled taxonomy used to define magazine scope.
-- Language: Explicit content language used for scope and discovery, separate from UI language.
+- UserProfile: Optional public or private professional profile attached to a user. Can include headline, bio, and external links.
+- Magazine: An editorial channel with exactly one topic and one language. Owned by a user.
+- Article: Long-form content with explicit lifecycle states and version history. Belongs to a magazine and inherits its scope.
+- Language: A controlled list of content languages used for discovery and scope.
+- Topic: A controlled taxonomy used to define editorial focus.
 
-## Editorial Model
+Relationships:
+- A user owns many magazines and authors many articles.
+- A user has zero or one user profile.
+- A magazine has many articles.
+- An article belongs to one magazine and is tied to that magazine's topic and language.
 
-- One topic per magazine.
-- One language per magazine.
-- Articles inherit topic and language from their magazine.
-- Articles that do not match scope are rejected.
+## Folder Structure
 
-## Article Lifecycle
-
-- Draft: Private working state.
-- Submitted: Ready for scope checks and publication.
-- Published: Visible to readers.
-- Rejected: Blocked due to scope mismatch or policy violation.
-
-Explicit lifecycle states make moderation and editorial decisions transparent and auditable. They also prevent implicit or hidden transitions.
+- `backend/src/controllers`: Request handlers, validation, and response shaping.
+- `backend/src/repositories`: SQL access and persistence logic.
+- `backend/src/routes`: HTTP route definitions.
+- `backend/src/models`: TypeScript domain types.
+- `backend/src/db/migrations`: Database schema and seed migrations.
 
 ## API Overview
 
-- POST /magazines
-- GET /magazines
-- POST /magazines/:magazineId/articles
-- POST /articles/:articleId/submit
-- POST /articles/:articleId/publish
+Users (placeholder):
+- Registration is not implemented yet; user creation is assumed to be handled externally for now.
 
-## Example API Calls
+Profiles:
+- `PUT /profiles/me`
+- `GET /profiles/:userId`
+
+Magazines:
+- `POST /magazines`
+- `GET /magazines`
+
+Articles:
+- `POST /magazines/:id/articles`
+- `POST /articles/:id/submit`
+- `POST /articles/:id/publish`
+- `GET /articles`
+- `GET /articles/:id`
+
+### Example Requests
 
 Create a magazine:
 ```bash
@@ -84,27 +116,84 @@ curl -X POST http://localhost:3000/articles/<article-id>/publish \
   -H "x-user-id: <user-id>"
 ```
 
-## Tech Stack
+List published articles:
+```bash
+curl -X GET "http://localhost:3000/articles?languageId=<language-id>&topicId=<topic-id>&limit=20&offset=0"
+```
 
-- Node.js
-- TypeScript
-- Express
-- PostgreSQL
+Get a published article:
+```bash
+curl -X GET http://localhost:3000/articles/<article-id>
+```
 
-## Project Status & Roadmap
+Upsert current user's profile:
+```bash
+curl -X PUT http://localhost:3000/profiles/me \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: <user-id>" \
+  -d '{
+    "headline": "Energy policy researcher",
+    "bio": "Focused on grid reliability and climate economics.",
+    "external_links": ["https://example.com"],
+    "visibility": "public"
+  }'
+```
 
-Implemented:
-- Domain model and database schema
-- Magazine creation and listing
-- Draft article creation
-- Article lifecycle endpoints (submit, publish)
-- Development auth stub (header-based)
+Get a public profile:
+```bash
+curl -X GET http://localhost:3000/profiles/<user-id>
+```
 
-Not implemented yet:
-- Real authentication
-- Authorization roles and permissions
-- Editorial review tools
-- Comments or messaging
-- Media support
-- Translation or multilingual content tooling
-- Frontend application
+## Running Locally
+
+1) Start PostgreSQL with Docker:
+```bash
+docker compose -f backend/docker/docker-compose.yml up -d
+```
+
+2) Configure environment variables:
+```bash
+cp .env.example .env
+```
+
+3) Install dependencies:
+```bash
+cd backend
+npm install
+```
+
+4) Run migrations and start the API:
+```bash
+npm run migrate
+npm run dev
+```
+
+## Environment Variables
+
+- `DATABASE_URL`: PostgreSQL connection string used by the API.
+- `PORT`: Port for the Express server (default is 3000 if unset).
+- `DEV_USER_ID`: Development-only user id used by the auth stub when no header is provided.
+
+## MVP Scope
+
+Included:
+- Real identity users and optional profiles.
+- Magazines scoped to a single topic and language.
+- Article versioning with explicit lifecycle states.
+- Public reading endpoints for published articles.
+- Public profile lookup.
+- Development auth stub for local testing.
+
+Excluded (intentional):
+- Authentication provider or production auth.
+- Social graph, likes, or algorithmic feeds.
+- Short-form or media-first content.
+- Comments, messaging, or notifications.
+- Monetization and premium features.
+
+## Future Work
+
+- Organizations and multi-author publications.
+- Dedicated frontend reader experience.
+- Production authentication and account recovery.
+- Conceptual anti-plagiarism tooling.

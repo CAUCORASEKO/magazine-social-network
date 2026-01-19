@@ -4,6 +4,7 @@ import {
   createDraftArticle,
   findArticleById,
   getPublishedArticleById,
+  listPublishedArticles,
   listPublishedArticlesByMagazine,
   updateArticleStatus
 } from "../repositories/articleRepository";
@@ -186,7 +187,7 @@ export async function publishArticleHandler(
   }
 }
 
-export async function listPublishedArticlesHandler(
+export async function listPublishedArticlesByMagazineHandler(
   req: Request,
   res: Response,
   next: NextFunction
@@ -238,6 +239,19 @@ export async function getPublishedArticleHandler(
     }
 
     res.json(article);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listPublishedArticlesHandler(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const articles = await listPublishedArticles();
+    res.json(articles);
   } catch (error) {
     next(error);
   }

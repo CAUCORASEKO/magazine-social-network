@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import {
   getPublishedArticleHandler,
+  listPublishedArticlesHandler,
   publishArticleHandler,
   submitArticleHandler
 } from "../controllers/articleController";
@@ -16,3 +17,4 @@ articlesRouter.post(
   publishArticleHandler
 );
 articlesRouter.get("/articles/:articleId", getPublishedArticleHandler);
+articlesRouter.get("/articles", listPublishedArticlesHandler);
