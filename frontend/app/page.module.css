@@ -166,31 +166,6 @@
   color: var(--accent-strong);
 }
 
-.pagination {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-}
-
-.pageLink {
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  background: #fff;
-  color: var(--ink);
-  transition: border 200ms ease, color 200ms ease;
-}
-
-.pageLink:hover {
-  border-color: var(--accent-strong);
-  color: var(--accent-strong);
-}
-
-.pageLinkDisabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
 
 .emptyState {
   padding: 2rem;

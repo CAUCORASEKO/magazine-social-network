@@ -4,7 +4,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20;
 
 const LANGUAGE_OPTIONS = [
   { value: "", label: "All languages" },
@@ -70,7 +70,6 @@ async function fetchArticles(params: {
   languageCode?: string;
   topicId?: string;
   limit: number;
-  offset: number;
 }): Promise<ArticleFeedItem[]> {
   const url = new URL("/articles", API_BASE_URL);
   if (params.languageCode) {
@@ -80,7 +79,6 @@ async function fetchArticles(params: {
     url.searchParams.set("topicId", params.topicId);
   }
   url.searchParams.set("limit", params.limit.toString());
-  url.searchParams.set("offset", params.offset.toString());
 
   const response = await fetch(url, { next: { revalidate: 10 } });
   if (!response.ok) {
@@ -96,8 +94,6 @@ export default async function Home({
 }): Promise<JSX.Element> {
   const languageCode = getParamValue(searchParams.language) ?? "";
   const topicId = getParamValue(searchParams.topicId) ?? "";
-  const offsetParam = getParamValue(searchParams.offset);
-  const offset = Math.max(Number.parseInt(offsetParam ?? "0", 10) || 0, 0);
 
   let articles: ArticleFeedItem[] = [];
   let errorMessage: string | null = null;
@@ -106,32 +102,11 @@ export default async function Home({
     articles = await fetchArticles({
       languageCode: languageCode || undefined,
       topicId: topicId || undefined,
-      limit: PAGE_SIZE,
-      offset
+      limit: PAGE_SIZE
     });
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "Unknown error";
   }
-
-  const baseParams = new URLSearchParams();
-  if (languageCode) {
-    baseParams.set("language", languageCode);
-  }
-  if (topicId) {
-    baseParams.set("topicId", topicId);
-  }
-
-  const prevOffset = Math.max(offset - PAGE_SIZE, 0);
-  const nextOffset = offset + PAGE_SIZE;
-
-  const prevParams = new URLSearchParams(baseParams);
-  prevParams.set("offset", prevOffset.toString());
-
-  const nextParams = new URLSearchParams(baseParams);
-  nextParams.set("offset", nextOffset.toString());
-
-  const canGoBack = offset > 0;
-  const canGoForward = articles.length === PAGE_SIZE;
 
   return (
     <main className={styles.page}>
@@ -189,24 +164,6 @@ export default async function Home({
       <section className={styles.feed}>
         <div className={styles.feedHeader}>
           <h2 className={styles.feedTitle}>Latest published articles</h2>
-          <div className={styles.pagination}>
-            <Link
-              className={`${styles.pageLink} ${
-                canGoBack ? "" : styles.pageLinkDisabled
-              }`}
-              href={`/?${prevParams.toString()}`}
-            >
-              Previous
-            </Link>
-            <Link
-              className={`${styles.pageLink} ${
-                canGoForward ? "" : styles.pageLinkDisabled
-              }`}
-              href={`/?${nextParams.toString()}`}
-            >
-              Next
-            </Link>
-          </div>
         </div>
 
         {errorMessage ? (
@@ -229,13 +186,9 @@ export default async function Home({
               <div>
                 <p className={styles.articleMeta}>
                   <span>{formatDate(article.published_at)}</span>
-                  <span>Language: {article.language_id}</span>
                 </p>
                 <h3 className={styles.articleTitle}>{article.title}</h3>
               </div>
-              <p className={styles.articleMeta}>
-                <span>Magazine: {article.magazine_id}</span>
-              </p>
               <Link className={styles.articleLink} href={`/articles/${article.id}`}>
                 Read article
               </Link>

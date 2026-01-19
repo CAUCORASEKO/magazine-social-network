@@ -1,0 +1,96 @@
+.page {
+  padding: 3.5rem clamp(1.5rem, 6vw, 5rem) 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.backLink {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+}
+
+.profile {
+  background: var(--paper);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: clamp(2rem, 5vw, 3.5rem);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--accent-strong);
+}
+
+.name {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+}
+
+.headline {
+  font-size: 1.05rem;
+  color: var(--muted);
+}
+
+.bio {
+  font-family: var(--font-serif), "Times New Roman", serif;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.linksTitle {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.linkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.linkList a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.emptyState {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
+.errorState {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: rgba(96, 36, 36, 0.08);
+  color: #5a1b1b;
+  border: 1px solid rgba(96, 36, 36, 0.2);
+}

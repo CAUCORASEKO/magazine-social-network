@@ -6,6 +6,7 @@ import {
   getPublishedArticleById,
   listPublishedArticles,
   listPublishedArticlesByMagazine,
+  listPublishedArticlesFeed,
   updateArticleStatus
 } from "../repositories/articleRepository";
 import { findMagazineById } from "../repositories/magazineRepository";
@@ -245,12 +246,80 @@ export async function getPublishedArticleHandler(
 }
 
 export async function listPublishedArticlesHandler(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const articles = await listPublishedArticles();
+    const allowedParams = new Set([
+      "languageCode",
+      "topicId",
+      "limit",
+      "offset"
+    ]);
+
+    for (const key of Object.keys(req.query)) {
+      if (!allowedParams.has(key)) {
+        res.status(400).json({ error: `Unknown query parameter: ${key}` });
+        return;
+      }
+    }
+
+    const rawLanguageCode = req.query.languageCode;
+    const rawTopicId = req.query.topicId;
+    const rawLimit = req.query.limit;
+    const rawOffset = req.query.offset;
+
+    if (
+      Array.isArray(rawLanguageCode) ||
+      Array.isArray(rawTopicId) ||
+      Array.isArray(rawLimit) ||
+      Array.isArray(rawOffset)
+    ) {
+      res.status(400).json({ error: "Query parameters must be single values" });
+      return;
+    }
+
+    const languageCode =
+      typeof rawLanguageCode === "string" && rawLanguageCode.trim().length
+        ? rawLanguageCode.trim()
+        : undefined;
+    const topicId =
+      typeof rawTopicId === "string" && rawTopicId.trim().length
+        ? rawTopicId.trim()
+        : undefined;
+
+    if (!languageCode && !topicId && rawLimit === undefined && rawOffset === undefined) {
+      const articles = await listPublishedArticles();
+      res.json(articles);
+      return;
+    }
+
+    const limitValue =
+      typeof rawLimit === "string" && rawLimit.trim().length
+        ? Number.parseInt(rawLimit, 10)
+        : 20;
+    const offsetValue =
+      typeof rawOffset === "string" && rawOffset.trim().length
+        ? Number.parseInt(rawOffset, 10)
+        : 0;
+
+    if (Number.isNaN(limitValue) || limitValue <= 0 || limitValue > 50) {
+      res.status(400).json({ error: "Limit must be between 1 and 50" });
+      return;
+    }
+
+    if (Number.isNaN(offsetValue) || offsetValue < 0) {
+      res.status(400).json({ error: "Offset must be 0 or greater" });
+      return;
+    }
+
+    const articles = await listPublishedArticlesFeed({
+      languageCode,
+      topicId,
+      limit: limitValue,
+      offset: offsetValue
+    });
     res.json(articles);
   } catch (error) {
     next(error);
