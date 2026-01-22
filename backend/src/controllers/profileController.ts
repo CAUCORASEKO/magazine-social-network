@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 
 import {
-  getPublicProfileByUserId,
+  getProfileByUserId,
   upsertUserProfileByUserId
 } from "../repositories/userProfileRepository";
+import { findUserById } from "../repositories/userRepository";
 
 interface UpsertProfileBody {
   headline?: unknown;
@@ -28,9 +29,20 @@ export async function getPublicProfileHandler(
       return;
     }
 
-    const profile = await getPublicProfileByUserId(userId);
+    const user = await findUserById(userId);
+    if (!user || user.account_status !== "active") {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(userId);
     if (!profile) {
       res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    if (profile.visibility !== "public" && req.session?.userId !== userId) {
+      res.status(403).json({ error: "Profile is private" });
       return;
     }
 

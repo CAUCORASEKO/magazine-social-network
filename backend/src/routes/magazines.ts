@@ -8,15 +8,22 @@ import {
   createArticleHandler,
   listPublishedArticlesHandler
 } from "../controllers/articleController";
-import { authStub } from "../middleware/authStub";
+import { requireAuth } from "../middleware/requireAuth";
+import { requireActiveAccount } from "../middleware/requireActiveAccount";
 
 export const magazinesRouter = Router();
 
-magazinesRouter.post("/magazines", authStub, createMagazineHandler);
-magazinesRouter.get("/magazines", authStub, listMagazinesHandler);
+magazinesRouter.post(
+  "/magazines",
+  requireAuth,
+  requireActiveAccount,
+  createMagazineHandler
+);
+magazinesRouter.get("/magazines", requireAuth, listMagazinesHandler);
 magazinesRouter.post(
   "/magazines/:magazineId/articles",
-  authStub,
+  requireAuth,
+  requireActiveAccount,
   createArticleHandler
 );
 magazinesRouter.get(

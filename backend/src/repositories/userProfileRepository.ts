@@ -9,6 +9,15 @@ export interface PublicUserProfile {
   visibility: "public";
 }
 
+export interface ProfileDetail {
+  user_id: string;
+  full_name: string;
+  headline: string | null;
+  bio: string | null;
+  external_links: unknown | null;
+  visibility: "public" | "private";
+}
+
 export interface UpsertUserProfileInput {
   headline: string | null;
   bio: string | null;
@@ -24,6 +33,9 @@ export interface UserProfileRecord {
   visibility: "public" | "private";
 }
 
+/**
+ * Perfil público (para /profiles/:userId)
+ */
 export async function getPublicProfileByUserId(
   userId: string
 ): Promise<PublicUserProfile | null> {
@@ -48,6 +60,35 @@ export async function getPublicProfileByUserId(
   return result.rows[0] ?? null;
 }
 
+/**
+ * Perfil privado / propio (para /profile)
+ */
+export async function getProfileByUserId(
+  userId: string
+): Promise<ProfileDetail | null> {
+  const result = await pool.query<ProfileDetail>(
+    `
+    SELECT
+      u.id AS user_id,
+      u.full_name,
+      up.headline,
+      up.bio,
+      up.external_links,
+      up.visibility
+    FROM user_profiles up
+    JOIN users u
+      ON u.id = up.user_id
+    WHERE up.user_id = $1
+    `,
+    [userId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Crear o actualizar perfil
+ */
 export async function upsertUserProfileByUserId(
   userId: string,
   input: UpsertUserProfileInput

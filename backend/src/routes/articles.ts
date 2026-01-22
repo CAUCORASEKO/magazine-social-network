@@ -6,14 +6,21 @@ import {
   publishArticleHandler,
   submitArticleHandler
 } from "../controllers/articleController";
-import { authStub } from "../middleware/authStub";
+import { requireAuth } from "../middleware/requireAuth";
+import { requireActiveAccount } from "../middleware/requireActiveAccount";
 
 export const articlesRouter = Router();
 
-articlesRouter.post("/articles/:articleId/submit", authStub, submitArticleHandler);
+articlesRouter.post(
+  "/articles/:articleId/submit",
+  requireAuth,
+  requireActiveAccount,
+  submitArticleHandler
+);
 articlesRouter.post(
   "/articles/:articleId/publish",
-  authStub,
+  requireAuth,
+  requireActiveAccount,
   publishArticleHandler
 );
 articlesRouter.get("/articles/:articleId", getPublishedArticleHandler);

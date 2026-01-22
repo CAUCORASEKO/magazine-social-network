@@ -4,9 +4,9 @@ import {
   getPublicProfileHandler,
   upsertMyProfileHandler
 } from "../controllers/profileController";
-import { authStub } from "../middleware/authStub";
+import { requireAuth } from "../middleware/requireAuth";
 
 export const profilesRouter = Router();
 
 profilesRouter.get("/profiles/:userId", getPublicProfileHandler);
-profilesRouter.put("/profiles/me", authStub, upsertMyProfileHandler);
+profilesRouter.put("/profiles/me", requireAuth, upsertMyProfileHandler);

@@ -4,5 +4,6 @@ export interface User {
   email: string;
   professional_background: string;
   ui_language_id: string;
-  status: "active" | "suspended";
+  country: string | null;
+  account_status: "pending" | "active";
 }

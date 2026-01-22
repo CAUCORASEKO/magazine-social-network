@@ -1,9 +1,16 @@
 import { pool } from "../db/pool";
 import { User } from "../models/User";
 
+export interface CreateUserInput {
+  full_name: string;
+  email: string;
+  professional_background: string;
+  ui_language_id: string;
+  country: string;
+}
+
 /**
  * Find a user by id.
- * Used by auth stub and later by services.
  */
 export async function findUserById(id: string): Promise<User | null> {
   const result = await pool.query<User>(
@@ -14,7 +21,8 @@ export async function findUserById(id: string): Promise<User | null> {
       email,
       professional_background,
       ui_language_id,
-      status
+      country,
+      account_status
     FROM users
     WHERE id = $1
     `,
@@ -22,4 +30,80 @@ export async function findUserById(id: string): Promise<User | null> {
   );
 
   return result.rows[0] ?? null;
+}
+
+export async function findUserByEmail(email: string): Promise<User | null> {
+  const result = await pool.query<User>(
+    `
+    SELECT
+      id,
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country,
+      account_status
+    FROM users
+    WHERE email = $1
+    `,
+    [email]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function createUser(input: CreateUserInput): Promise<User> {
+  const result = await pool.query<User>(
+    `
+    INSERT INTO users (
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country
+    )
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING
+      id,
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country,
+      account_status
+    `,
+    [
+      input.full_name,
+      input.email,
+      input.professional_background,
+      input.ui_language_id,
+      input.country
+    ]
+  );
+
+  return result.rows[0];
+}
+
+export async function updateAccountStatus(
+  userId: string,
+  status: User["account_status"]
+): Promise<User> {
+  const result = await pool.query<User>(
+    `
+    UPDATE users
+    SET account_status = $2
+    WHERE id = $1
+    RETURNING
+      id,
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country,
+      account_status
+    `,
+    [userId, status]
+  );
+
+  return result.rows[0];
 }
