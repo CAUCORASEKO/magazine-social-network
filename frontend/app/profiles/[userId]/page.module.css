@@ -10,6 +10,9 @@
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--muted);
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .profile {
@@ -21,6 +24,9 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .header {
@@ -77,6 +83,52 @@
 .linkList a {
   color: var(--accent-strong);
   font-weight: 600;
+}
+
+.articles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  border-top: 1px solid rgba(217, 210, 198, 0.7);
+  padding-top: 1.4rem;
+}
+
+.articlesTitle {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.emptyArticles {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.articleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.articleList li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.articleList a {
+  font-family: var(--font-serif), "Times New Roman", serif;
+  font-size: 1.1rem;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.articleMeta {
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .emptyState {

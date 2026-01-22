@@ -2,8 +2,8 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 
 import styles from "./page.module.css";
+import { API_BASE_URL } from "./lib/api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PAGE_SIZE = 20;
 
 const LANGUAGE_OPTIONS = [
@@ -80,7 +80,10 @@ async function fetchArticles(params: {
   }
   url.searchParams.set("limit", params.limit.toString());
 
-  const response = await fetch(url, { next: { revalidate: 10 } });
+  const response = await fetch(url, {
+    next: { revalidate: 10 },
+    credentials: "include"
+  });
   if (!response.ok) {
     throw new Error("Failed to load articles");
   }
@@ -154,8 +157,7 @@ export default async function Home({
           </form>
           {TOPIC_OPTIONS.length === 0 ? (
             <p className={styles.note}>
-              Topic filters use seeded topic ids. Add them via
-              NEXT_PUBLIC_TOPIC_* env vars.
+              Topic filters are available when configured for this demo.
             </p>
           ) : null}
         </div>
@@ -172,7 +174,7 @@ export default async function Home({
 
         {!errorMessage && articles.length === 0 ? (
           <div className={styles.emptyState}>
-            No published articles match these filters yet.
+            No articles published yet.
           </div>
         ) : null}
 

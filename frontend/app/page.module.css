@@ -109,7 +109,10 @@
 .feed {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
+  max-width: 56rem;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .feedHeader {
@@ -124,23 +127,23 @@
 }
 
 .articleList {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
 .articleCard {
-  background: var(--paper);
-  border-radius: 18px;
-  border: 1px solid rgba(217, 210, 198, 0.8);
-  padding: 1.4rem 1.5rem;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(217, 210, 198, 0.7);
+  padding: 1.6rem 0;
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1rem;
-  box-shadow: 0 16px 32px rgba(33, 32, 28, 0.08);
   opacity: 0;
   transform: translateY(12px);
   animation: riseIn 600ms ease forwards;
@@ -150,20 +153,24 @@
 .articleMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem 1.2rem;
-  font-size: 0.8rem;
+  gap: 0.5rem 1.2rem;
+  font-size: 0.82rem;
   color: var(--muted);
 }
 
 .articleTitle {
   font-family: var(--font-serif), "Times New Roman", serif;
-  font-size: 1.2rem;
-  line-height: 1.4;
+  font-size: 1.35rem;
+  line-height: 1.45;
 }
 
 .articleLink {
   font-weight: 600;
   color: var(--accent-strong);
+}
+
+.articleCard:last-child {
+  border-bottom: none;
 }
 
 
@@ -205,6 +212,11 @@
   }
 
   .feedHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .articleCard {
     flex-direction: column;
     align-items: flex-start;
   }
