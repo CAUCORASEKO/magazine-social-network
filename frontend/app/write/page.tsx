@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 
 import styles from "./page.module.css";
 import { API_BASE_URL } from "../lib/api";
+import {
+  type IdentityStatus,
+  isIdentityVerified
+} from "../lib/verification";
 
 type Magazine = {
   id: string;
@@ -26,6 +30,7 @@ type MeResponse = {
   id: string;
   email_verified: boolean;
   account_status: "pending" | "active";
+  identity_status: IdentityStatus;
 };
 
 type MarkdownBlock =
@@ -258,6 +263,13 @@ export default function WritePage(): JSX.Element {
           return;
         }
 
+        if (!isIdentityVerified(me.identity_status)) {
+          setGuardMessage(
+            "Publishing requires a verified identity. Review your verification status in your profile."
+          );
+          return;
+        }
+
         if (me.account_status !== "active") {
           setGuardMessage("Complete your profile to start writing.");
           router.replace("/onboarding");
@@ -455,10 +467,16 @@ export default function WritePage(): JSX.Element {
   }
 
   if (guardMessage) {
+    const isIdentityBlock = guardMessage.includes("verified identity");
     return (
       <main className={styles.page}>
         <div className={styles.notice}>
           <p>{guardMessage}</p>
+          {isIdentityBlock ? (
+            <p className={styles.noticeLinks}>
+              <Link href="/profile/edit">Review profile verification</Link>
+            </p>
+          ) : null}
           {guardMessage.includes("profile") ? (
             <p className={styles.noticeLinks}>
               <Link href="/onboarding">Complete onboarding</Link>

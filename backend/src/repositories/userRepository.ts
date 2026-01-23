@@ -22,7 +22,10 @@ export async function findUserById(id: string): Promise<User | null> {
       professional_background,
       ui_language_id,
       country,
-      account_status
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
     FROM users
     WHERE id = $1
     `,
@@ -42,7 +45,10 @@ export async function findUserByEmail(email: string): Promise<User | null> {
       professional_background,
       ui_language_id,
       country,
-      account_status
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
     FROM users
     WHERE email = $1
     `,
@@ -70,7 +76,10 @@ export async function createUser(input: CreateUserInput): Promise<User> {
       professional_background,
       ui_language_id,
       country,
-      account_status
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
     `,
     [
       input.full_name,
@@ -100,7 +109,10 @@ export async function updateAccountStatus(
       professional_background,
       ui_language_id,
       country,
-      account_status
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
     `,
     [userId, status]
   );

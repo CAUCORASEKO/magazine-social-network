@@ -1,4 +1,9 @@
 import { pool } from "../db/pool";
+import {
+  PROFESSIONAL_STATUS,
+  type IdentityStatus,
+  type ProfessionalStatus
+} from "../constants/verification";
 
 export interface PublicUserProfile {
   user_id: string;
@@ -7,6 +12,8 @@ export interface PublicUserProfile {
   bio: string | null;
   external_links: unknown | null;
   visibility: "public";
+  identity_status: IdentityStatus;
+  professional_status: ProfessionalStatus;
 }
 
 export interface ProfileDetail {
@@ -16,6 +23,8 @@ export interface ProfileDetail {
   bio: string | null;
   external_links: unknown | null;
   visibility: "public" | "private";
+  identity_status: IdentityStatus;
+  professional_status: ProfessionalStatus;
 }
 
 export interface UpsertUserProfileInput {
@@ -31,6 +40,14 @@ export interface UserProfileRecord {
   bio: string | null;
   external_links: unknown | null;
   visibility: "public" | "private";
+  professional_status: ProfessionalStatus;
+}
+
+export interface ProfessionalVerificationRecord {
+  user_id: string;
+  professional_status: ProfessionalStatus;
+  professional_score: number | null;
+  professional_verified_at: string | null;
 }
 
 /**
@@ -44,10 +61,12 @@ export async function getPublicProfileByUserId(
     SELECT
       u.id AS user_id,
       u.full_name,
+      u.identity_status,
       up.headline,
       up.bio,
       up.external_links,
-      up.visibility
+      up.visibility,
+      up.professional_status
     FROM users u
     JOIN user_profiles up
       ON up.user_id = u.id
@@ -71,10 +90,12 @@ export async function getProfileByUserId(
     SELECT
       u.id AS user_id,
       u.full_name,
+      u.identity_status,
       up.headline,
       up.bio,
       up.external_links,
-      up.visibility
+      up.visibility,
+      up.professional_status
     FROM user_profiles up
     JOIN users u
       ON u.id = up.user_id
@@ -116,7 +137,8 @@ export async function upsertUserProfileByUserId(
       headline,
       bio,
       external_links,
-      visibility
+      visibility,
+      professional_status
     `,
     [
       userId,
@@ -126,6 +148,50 @@ export async function upsertUserProfileByUserId(
         ? JSON.stringify(input.external_links)
         : null,
       input.visibility
+    ]
+  );
+
+  return result.rows[0];
+}
+
+export async function updateProfessionalVerificationStatus(
+  userId: string,
+  params: {
+    professional_status: ProfessionalStatus;
+    professional_score: number | null;
+    professional_verified_at: string | null;
+  }
+): Promise<ProfessionalVerificationRecord> {
+  const allowedStatuses: ProfessionalStatus[] = [
+    PROFESSIONAL_STATUS.EMPTY,
+    PROFESSIONAL_STATUS.PENDING,
+    PROFESSIONAL_STATUS.AI_VERIFIED,
+    PROFESSIONAL_STATUS.REJECTED
+  ];
+
+  if (!allowedStatuses.includes(params.professional_status)) {
+    throw new Error("Invalid professional status");
+  }
+
+  const result = await pool.query<ProfessionalVerificationRecord>(
+    `
+    UPDATE user_profiles
+    SET professional_status = $2,
+        professional_score = $3,
+        professional_verified_at = $4,
+        updated_at = now()
+    WHERE user_id = $1
+    RETURNING
+      user_id,
+      professional_status,
+      professional_score,
+      professional_verified_at
+    `,
+    [
+      userId,
+      params.professional_status,
+      params.professional_score,
+      params.professional_verified_at
     ]
   );
 

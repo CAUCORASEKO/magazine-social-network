@@ -2,9 +2,16 @@ import type { Request, Response, NextFunction } from "express";
 
 import {
   getProfileByUserId,
+  updateProfessionalVerificationStatus,
   upsertUserProfileByUserId
 } from "../repositories/userProfileRepository";
 import { findUserById } from "../repositories/userRepository";
+import { PROFESSIONAL_STATUS } from "../constants/verification";
+import {
+  getProfileCvByUserId,
+  upsertProfileCvByUserId,
+  type ProfileCvPayload
+} from "../repositories/profileCvRepository";
 
 interface UpsertProfileBody {
   headline?: unknown;
@@ -150,6 +157,210 @@ export async function upsertMyProfileHandler(
         return;
       }
     }
+    next(error);
+  }
+}
+
+export async function requestProfessionalVerificationHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(req.user.id);
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    if (profile.professional_status !== PROFESSIONAL_STATUS.EMPTY) {
+      res.status(400).json({ error: "Professional verification already requested" });
+      return;
+    }
+
+    const updated = await updateProfessionalVerificationStatus(req.user.id, {
+      professional_status: PROFESSIONAL_STATUS.PENDING,
+      professional_score: null,
+      professional_verified_at: null
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
+
+function normalizeString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} is required`);
+  }
+  return trimmed;
+}
+
+function normalizeOptionalString(value: unknown, label: string): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeOptionalNumber(value: unknown, label: string): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new Error(`${label} must be a number`);
+  }
+  return value;
+}
+
+function normalizeOptionalDate(value: unknown, label: string): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed;
+}
+
+function normalizeCvPayload(body: unknown): ProfileCvPayload {
+  if (!body || typeof body !== "object") {
+    throw new Error("Invalid payload");
+  }
+
+  const data = body as {
+    education?: unknown;
+    experience?: unknown;
+    projects?: unknown;
+    links?: unknown;
+  };
+
+  const educationInput = Array.isArray(data.education) ? data.education : [];
+  const experienceInput = Array.isArray(data.experience) ? data.experience : [];
+  const projectsInput = Array.isArray(data.projects) ? data.projects : [];
+  const linksInput = Array.isArray(data.links) ? data.links : [];
+
+  const education = educationInput.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`Education item ${index + 1} is invalid`);
+    }
+    const entry = item as Record<string, unknown>;
+    return {
+      institution: normalizeString(entry.institution, "Education institution"),
+      degree: normalizeString(entry.degree, "Education degree"),
+      start_year: normalizeOptionalNumber(entry.start_year, "Education start_year"),
+      end_year: normalizeOptionalNumber(entry.end_year, "Education end_year"),
+      country: normalizeOptionalString(entry.country, "Education country")
+    };
+  });
+
+  const experience = experienceInput.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`Experience item ${index + 1} is invalid`);
+    }
+    const entry = item as Record<string, unknown>;
+    const isCurrent = Boolean(entry.is_current);
+    return {
+      company: normalizeString(entry.company, "Experience company"),
+      role: normalizeString(entry.role, "Experience role"),
+      start_date: normalizeString(entry.start_date, "Experience start_date"),
+      end_date: normalizeOptionalDate(entry.end_date, "Experience end_date"),
+      description: normalizeString(entry.description, "Experience description"),
+      is_current: isCurrent
+    };
+  });
+
+  const projects = projectsInput.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`Project item ${index + 1} is invalid`);
+    }
+    const entry = item as Record<string, unknown>;
+    return {
+      name: normalizeString(entry.name, "Project name"),
+      description: normalizeString(entry.description, "Project description"),
+      url: normalizeOptionalString(entry.url, "Project url")
+    };
+  });
+
+  const links = linksInput.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`Link item ${index + 1} is invalid`);
+    }
+    const entry = item as Record<string, unknown>;
+    return {
+      label: normalizeOptionalString(entry.label, "Link label"),
+      url: normalizeString(entry.url, "Link url")
+    };
+  });
+
+  return {
+    education,
+    experience,
+    projects,
+    links
+  };
+}
+
+export async function getProfileCvHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const payload = await getProfileCvByUserId(req.user.id);
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function upsertProfileCvHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    let payload: ProfileCvPayload;
+    try {
+      payload = normalizeCvPayload(req.body);
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Invalid payload"
+      });
+      return;
+    }
+
+    const saved = await upsertProfileCvByUserId(req.user.id, payload);
+    res.json(saved);
+  } catch (error) {
     next(error);
   }
 }

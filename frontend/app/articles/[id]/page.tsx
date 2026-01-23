@@ -2,6 +2,12 @@ import Link from "next/link";
 
 import styles from "./page.module.css";
 import { API_BASE_URL } from "../../lib/api";
+import {
+  type IdentityStatus,
+  type ProfessionalStatus,
+  IDENTITY_STATUS,
+  PROFESSIONAL_STATUS
+} from "../../lib/verification";
 
 interface ArticleDetail {
   id: string;
@@ -10,6 +16,11 @@ interface ArticleDetail {
   published_at: string | null;
   magazine_id: string;
   author_user_id: string;
+}
+
+interface PublicProfileSnippet {
+  identity_status: IdentityStatus;
+  professional_status: ProfessionalStatus;
 }
 
 type MarkdownBlock =
@@ -138,6 +149,81 @@ function renderInline(text: string): Array<string | JSX.Element> {
   return parts;
 }
 
+function getIdentityBadge(status: IdentityStatus): {
+  label: string;
+  tooltip: string;
+  tone: "verified" | "pending" | "rejected" | "muted";
+} {
+  switch (status) {
+    case IDENTITY_STATUS.VERIFIED:
+      return {
+        label: "Identity verified",
+        tooltip: "Identity verified. This author can publish as verified.",
+        tone: "verified"
+      };
+    case IDENTITY_STATUS.PENDING:
+      return {
+        label: "Identity under review",
+        tooltip:
+          "Identity verification is in progress. Publishing is restricted until approved.",
+        tone: "pending"
+      };
+    case IDENTITY_STATUS.REJECTED:
+      return {
+        label: "Identity verification failed",
+        tooltip:
+          "Identity verification failed. The author must update details to retry.",
+        tone: "rejected"
+      };
+    case IDENTITY_STATUS.UNVERIFIED:
+    default:
+      return {
+        label: "Identity not verified",
+        tooltip:
+          "Identity not verified yet. This author has not completed identity checks.",
+        tone: "muted"
+      };
+  }
+}
+
+function getProfessionalBadge(status: ProfessionalStatus): {
+  label: string;
+  tooltip: string;
+  tone: "verified" | "pending" | "rejected" | "muted";
+} {
+  switch (status) {
+    case PROFESSIONAL_STATUS.AI_VERIFIED:
+      return {
+        label: "Profession verified by AI",
+        tooltip:
+          "Professional profile verified by AI based on profile completeness.",
+        tone: "verified"
+      };
+    case PROFESSIONAL_STATUS.PENDING:
+      return {
+        label: "Professional verification in progress",
+        tooltip:
+          "Professional verification is in progress. Results will appear here.",
+        tone: "pending"
+      };
+    case PROFESSIONAL_STATUS.REJECTED:
+      return {
+        label: "Professional verification rejected",
+        tooltip:
+          "Professional verification was rejected. The author can request a review.",
+        tone: "rejected"
+      };
+    case PROFESSIONAL_STATUS.EMPTY:
+    default:
+      return {
+        label: "Profession not verified",
+        tooltip:
+          "Professional verification has not started. The author can request it.",
+        tone: "muted"
+      };
+  }
+}
+
 async function fetchArticle(articleId: string): Promise<ArticleDetail> {
   const response = await fetch(`${API_BASE_URL}/articles/${articleId}`, {
     next: { revalidate: 10 },
@@ -151,16 +237,42 @@ async function fetchArticle(articleId: string): Promise<ArticleDetail> {
   return (await response.json()) as ArticleDetail;
 }
 
+async function fetchAuthorProfile(
+  userId: string
+): Promise<PublicProfileSnippet | null> {
+  const response = await fetch(`${API_BASE_URL}/profiles/${userId}`, {
+    next: { revalidate: 10 },
+    credentials: "include"
+  });
+
+  if (response.status === 404 || response.status === 403) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("Unable to load author profile");
+  }
+
+  const data = (await response.json()) as PublicProfileSnippet;
+  return data;
+}
+
 export default async function ArticlePage({
   params
 }: {
   params: { id: string };
 }): Promise<JSX.Element> {
   let article: ArticleDetail | null = null;
+  let authorProfile: PublicProfileSnippet | null = null;
   let errorMessage: string | null = null;
 
   try {
     article = await fetchArticle(params.id);
+    try {
+      authorProfile = await fetchAuthorProfile(article.author_user_id);
+    } catch {
+      authorProfile = null;
+    }
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "Unknown error";
   }
@@ -188,6 +300,50 @@ export default async function ArticlePage({
                   View profile
                 </Link>
               </span>
+              {authorProfile ? (
+                <span className={styles.badgeRow}>
+                  {(() => {
+                    const badge = getIdentityBadge(authorProfile.identity_status);
+                    return (
+                      <span
+                        className={`${styles.badge} ${
+                          badge.tone === "verified"
+                            ? styles.badgeVerified
+                            : badge.tone === "pending"
+                            ? styles.badgePending
+                            : badge.tone === "rejected"
+                            ? styles.badgeRejected
+                            : styles.badgeMuted
+                        }`}
+                        title={badge.tooltip}
+                      >
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
+                  {(() => {
+                    const badge = getProfessionalBadge(
+                      authorProfile.professional_status
+                    );
+                    return (
+                      <span
+                        className={`${styles.badge} ${
+                          badge.tone === "verified"
+                            ? styles.badgeVerified
+                            : badge.tone === "pending"
+                            ? styles.badgePending
+                            : badge.tone === "rejected"
+                            ? styles.badgeRejected
+                            : styles.badgeMuted
+                        }`}
+                        title={badge.tooltip}
+                      >
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
+                </span>
+              ) : null}
               <span>Magazine: {article.magazine_id}</span>
             </div>
           </header>

@@ -10,6 +10,7 @@ import {
 } from "../repositories/authRepository";
 import { findLanguageByCode } from "../repositories/languageRepository";
 import { findUserById } from "../repositories/userRepository";
+import { getProfileByUserId } from "../repositories/userProfileRepository";
 
 interface RegisterBody {
   full_name?: string;
@@ -200,9 +201,12 @@ export async function meHandler(
       return;
     }
 
+    const profile = await getProfileByUserId(userId);
+
     res.json({
       ...user,
-      email_verified: credential.email_verified
+      email_verified: credential.email_verified,
+      ...(profile ? { professional_status: profile.professional_status } : {})
     });
   } catch (error) {
     next(error);

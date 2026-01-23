@@ -41,7 +41,10 @@ export async function createUserWithCredentials(params: {
         professional_background,
         ui_language_id,
         country,
-        account_status
+        account_status,
+        identity_status,
+        identity_verified_at,
+        identity_score
       `,
       [
         params.full_name,

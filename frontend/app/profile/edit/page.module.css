@@ -71,6 +71,111 @@
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
+.cvSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  border-top: 1px solid rgba(217, 210, 198, 0.7);
+  padding-top: 1.5rem;
+}
+
+.cvHeader h2 {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 1.4rem;
+}
+
+.cvEyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  color: var(--accent-strong);
+  margin: 0;
+}
+
+.cvSubhead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.cvBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.cvBlockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cvBlockHeader h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.ghostButton {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.ghostButton:hover {
+  color: var(--ink);
+  border-color: var(--accent-strong);
+}
+
+.cvEmpty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cvItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(217, 210, 198, 0.7);
+}
+
+.cvRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.8rem;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.removeButton {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #8b2a2a;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
 .primaryButton:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 20px rgba(32, 62, 53, 0.16);
@@ -80,6 +185,73 @@
   opacity: 0.6;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.secondaryButton {
+  border-radius: 999px;
+  padding: 0.75rem 1.6rem;
+  border: 1px dashed var(--border);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+.secondaryButton:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(33, 32, 28, 0.12);
+}
+
+.verificationPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.verificationLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.verificationStatus {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.verificationSuccess {
+  font-size: 0.9rem;
+  color: #1f6f4a;
+  background: rgba(36, 110, 74, 0.12);
+  border: 1px solid rgba(36, 110, 74, 0.25);
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+}
+
+.verificationRejected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: #8b2a2a;
+}
+
+.verificationRejected p {
+  margin: 0;
 }
 
 .error {
