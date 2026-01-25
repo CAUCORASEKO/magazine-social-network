@@ -1,15 +1,15 @@
 # Magazine Social Network
 
-Magazine Social Network is a text-first editorial platform for professional writers,
-researchers, and subject-matter experts who publish within topic- and language-scoped
-magazines. It bridges the gap between social networks and editorial publications with
-a structured, read-only environment for long-form work.
+Magazine Social Network is a text-first editorial platform designed for professional
+writers, researchers, and subject-matter experts who publish within topic- and
+language-scoped magazines. It deliberately bridges the gap between social networks
+and editorial publications through a structured, read-only environment for long-form work.
 
 ![Magazine Social Network home](docs/images/magazine-home.png)
 
 ## Product Philosophy
 
-- Text-first: writing is the primary medium, not a wrapper around engagement.
+- Text-first: writing is the primary medium, not a wrapper for engagement.
 - Long-form: depth, context, and rigor are first-class.
 - Editorial scope: publications are bound to a topic and a language.
 - Real identities: accountability is built into the author profile.
@@ -21,8 +21,7 @@ a structured, read-only environment for long-form work.
 
 ![Registration](docs/images/magazine-register.png)
 
-Clear onboarding with session-based access keeps the platform focused on verified,
-accountable publishing.
+Session-based onboarding keeps the platform focused on verified, accountable publishing.
 
 ![Login](docs/images/magazine-login.png)
 
@@ -34,19 +33,19 @@ Professional profiles keep public presence structured and consistent across publ
 
 ![Verify identity](docs/images/magazine-verify-identity.png)
 
-Identity verification reinforces trust without leaking personal documents into the system.
+Identity verification reinforces trust without bringing personal documents into the system.
 
 ### Public professional presence
 
 ![Public profile](docs/images/magazine-public-profile.png)
 
-Public profiles expose verified identity signals alongside long-form work.
+Public profiles present verified identity signals alongside long-form work.
 
 ### Account & privacy controls
 
 ![Account settings](docs/images/magazine-account-settings.png)
 
-Clear account controls make privacy, verification, and session management explicit.
+Clear account controls keep privacy, verification, and session management explicit.
 
 ## Current Scope (MVP)
 
@@ -55,7 +54,7 @@ Clear account controls make privacy, verification, and session management explic
 - Article lifecycle with explicit states (draft, submitted, published)
 - Article version history preserved in the database
 - Public read endpoints for articles and public profiles
-- Minimal Next.js reader UI for feed, article, and public profile pages
+- Minimal Next.js read-only reader UI for feed, article, and public profile pages
 - Session-based authentication with email verification
 - Seeded languages and topics for filtering
 
@@ -99,7 +98,7 @@ Phase A — Profile & CV data collection
 Phase B — Verification request
 - Users explicitly request verification, creating a request record independent of profile edits.
 
-Phase C — AI-assisted analysis (deterministic, explainable)
+Phase C — AI-assisted verification analysis (deterministic, explainable)
 - Analysis evaluates consistency and professional plausibility using deterministic checks and explainable signals.
 
 Phase D — Post-verification actions
@@ -166,5 +165,5 @@ Required environment variables:
 ## Project Status
 
 - Foundation complete
-- Read-only MVP
+- Read-only MVP (by design)
 - Ready for evaluation and iteration
