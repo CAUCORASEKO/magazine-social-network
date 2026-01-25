@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import {
   createUserWithCredentials,
@@ -11,6 +13,7 @@ import {
 import { findLanguageByCode } from "../repositories/languageRepository";
 import { deleteUserById, findUserById } from "../repositories/userRepository";
 import { getProfileByUserId } from "../repositories/userProfileRepository";
+import { pool } from "../db/pool";
 
 interface RegisterBody {
   full_name?: string;
@@ -226,6 +229,103 @@ export async function deleteAccountHandler(
   }
 }
 
+export async function deleteMeHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const userId = req.user.id;
+    const client = await pool.connect();
+    let profileImageUrl: string | null = null;
+
+    try {
+      await client.query("BEGIN");
+
+      const profileResult = await client.query<{ profile_image_url: string | null }>(
+        `
+        SELECT profile_image_url
+        FROM user_profiles
+        WHERE user_id = $1
+        `,
+        [userId]
+      );
+      profileImageUrl = profileResult.rows[0]?.profile_image_url ?? null;
+
+      await client.query(
+        `
+        DELETE FROM articles
+        WHERE author_user_id = $1
+        `,
+        [userId]
+      );
+
+      await client.query(
+        `
+        DELETE FROM magazines
+        WHERE owner_user_id = $1
+        `,
+        [userId]
+      );
+
+      await client.query(
+        `
+        DELETE FROM user_profiles
+        WHERE user_id = $1
+        `,
+        [userId]
+      );
+
+      await client.query(
+        `
+        DELETE FROM auth_credentials
+        WHERE user_id = $1
+        `,
+        [userId]
+      );
+
+      const userResult = await client.query(
+        `
+        DELETE FROM users
+        WHERE id = $1
+        `,
+        [userId]
+      );
+
+      if (userResult.rowCount === 0) {
+        throw new Error("User not found");
+      }
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    if (profileImageUrl) {
+      await removeLocalProfileImage(profileImageUrl);
+    }
+
+    req.session.destroy((err) => {
+      if (err) {
+        next(err);
+        return;
+      }
+      res.clearCookie("connect.sid");
+      res.status(204).end();
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function meHandler(
   req: Request,
   res: Response,
@@ -266,6 +366,19 @@ export async function meHandler(
     });
   } catch (error) {
     next(error);
+  }
+}
+
+async function removeLocalProfileImage(url: string): Promise<void> {
+  if (!url.startsWith("/uploads/")) {
+    return;
+  }
+  const relativePath = url.replace(/^\/uploads\//, "");
+  const filePath = path.join(__dirname, "..", "uploads", relativePath);
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    return;
   }
 }
 
