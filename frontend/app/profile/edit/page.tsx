@@ -10,19 +10,22 @@ import {
   type ProfessionalStatus,
   PROFESSIONAL_STATUS
 } from "../../lib/verification";
-
 type MeResponse = {
   id: string;
+  full_name: string;
   email_verified: boolean;
   account_status: "pending" | "active";
 };
 
 type PublicProfile = {
+  profile_image_url: string | null;
   headline: string | null;
   bio: string | null;
   external_links: string[] | null;
   visibility: "public";
   professional_status: ProfessionalStatus;
+  professional_score: number | null;
+  professional_verified_at: string | null;
 };
 
 type EducationEntry = {
@@ -82,20 +85,26 @@ type ProfileCvResponse = {
 
 export default function ProfileEditPage(): JSX.Element {
   const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [headline, setHeadline] = useState("");
   const [bio, setBio] = useState("");
   const [externalLinks, setExternalLinks] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [professionalStatus, setProfessionalStatus] =
     useState<ProfessionalStatus>(PROFESSIONAL_STATUS.EMPTY);
+  const [professionalVerifiedAt, setProfessionalVerifiedAt] = useState<
+    string | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [verificationMessage, setVerificationMessage] = useState<string | null>(
-    null
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isSavingCv, setIsSavingCv] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const [education, setEducation] = useState<EducationEntry[]>([]);
   const [experience, setExperience] = useState<ExperienceEntry[]>([]);
@@ -126,6 +135,9 @@ export default function ProfileEditPage(): JSX.Element {
           router.replace("/onboarding");
           return;
         }
+        if (isActive) {
+          setFullName(me.full_name ?? "");
+        }
 
         const profileResponse = await fetch(
           `${API_BASE_URL}/profiles/${me.id}`,
@@ -141,6 +153,11 @@ export default function ProfileEditPage(): JSX.Element {
             );
             setVisibility(profile.visibility);
             setProfessionalStatus(profile.professional_status);
+            setProfessionalVerifiedAt(profile.professional_verified_at ?? null);
+            setProfileImageUrl(resolveProfileImageUrl(profile.profile_image_url));
+            setSelectedPhotoFile(null);
+            setPhotoPreviewUrl(null);
+            setPhotoError(null);
           }
         }
 
@@ -204,7 +221,7 @@ export default function ProfileEditPage(): JSX.Element {
     event.preventDefault();
     setErrorMessage(null);
     setMessage(null);
-    setVerificationMessage(null);
+    setPhotoError(null);
 
     setIsSubmitting(true);
     try {
@@ -212,6 +229,36 @@ export default function ProfileEditPage(): JSX.Element {
         .split("\n")
         .map((link) => link.trim())
         .filter(Boolean);
+
+      if (selectedPhotoFile) {
+        setIsUploadingPhoto(true);
+        try {
+          const formData = new FormData();
+          formData.append("photo", selectedPhotoFile);
+          const photoResponse = await fetch(`${API_BASE_URL}/profile/photo`, {
+            method: "POST",
+            credentials: "include",
+            body: formData
+          });
+          if (!photoResponse.ok) {
+            const data = (await photoResponse.json()) as { error?: string };
+            throw new Error(data?.error || "Unable to upload photo.");
+          }
+          const updated = (await photoResponse.json()) as {
+            profile_image_url: string | null;
+          };
+          setProfileImageUrl(resolveProfileImageUrl(updated.profile_image_url));
+          setSelectedPhotoFile(null);
+          setPhotoPreviewUrl(null);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Unable to upload photo.";
+          setPhotoError(message);
+          throw new Error(message);
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
 
       const response = await fetch(`${API_BASE_URL}/profiles/me`, {
         method: "PUT",
@@ -230,6 +277,8 @@ export default function ProfileEditPage(): JSX.Element {
         throw new Error(data?.error || "Unable to save profile.");
       }
 
+      const updated = (await response.json()) as PublicProfile;
+      setProfileImageUrl(resolveProfileImageUrl(updated.profile_image_url));
       setMessage("Profile updated.");
     } catch (error) {
       setErrorMessage(
@@ -243,7 +292,6 @@ export default function ProfileEditPage(): JSX.Element {
   async function handleRequestVerification(): Promise<void> {
     setErrorMessage(null);
     setMessage(null);
-    setVerificationMessage(null);
     setIsRequesting(true);
 
     try {
@@ -264,7 +312,6 @@ export default function ProfileEditPage(): JSX.Element {
         professional_status: ProfessionalStatus;
       };
       setProfessionalStatus(result.professional_status);
-      setVerificationMessage("Professional verification is now in progress.");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to request verification."
@@ -375,7 +422,6 @@ export default function ProfileEditPage(): JSX.Element {
   async function handleSaveCv(): Promise<void> {
     setErrorMessage(null);
     setMessage(null);
-    setVerificationMessage(null);
     setIsSavingCv(true);
 
     try {
@@ -456,38 +502,182 @@ export default function ProfileEditPage(): JSX.Element {
     setLinks((items) => items.filter((_, idx) => idx !== index));
   }
 
-  const statusLabel = (() => {
+  function formatVerifiedDate(value: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString().slice(0, 10);
+  }
+
+  const professionalDetails = (() => {
+    const verifiedOn = formatVerifiedDate(professionalVerifiedAt);
     switch (professionalStatus) {
       case PROFESSIONAL_STATUS.PENDING:
-        return "Professional verification in progress.";
+        return {
+          label: "Verification in progress",
+          tone: "pending" as const,
+          helper: "We’re reviewing your professional background.",
+          actionLabel: "Verification in progress",
+          actionDisabled: true
+        };
       case PROFESSIONAL_STATUS.AI_VERIFIED:
-        return "Professional verification successful.";
+        return {
+          label: "Profession verified",
+          tone: "verified" as const,
+          helper: verifiedOn ? `Verified on ${verifiedOn}` : "Verified."
+        };
       case PROFESSIONAL_STATUS.REJECTED:
-        return "Professional verification rejected.";
+        return {
+          label: "Verification rejected",
+          tone: "rejected" as const,
+          helper: "Update your background and retry verification.",
+          actionLabel: "Retry verification",
+          actionDisabled: false
+        };
       case PROFESSIONAL_STATUS.EMPTY:
       default:
-        return "Professional verification not started.";
+        return {
+          label: "Profession not verified",
+          tone: "muted" as const,
+          helper: "Add your background to request professional verification.",
+          actionLabel: "Request professional verification",
+          actionDisabled: false
+        };
     }
   })();
+
+  function resolveProfileImageUrl(url: string | null): string | null {
+    if (!url) {
+      return null;
+    }
+    if (url.startsWith("/")) {
+      return `${API_BASE_URL}${url}`;
+    }
+    return url;
+  }
+
+  function getInitials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return "";
+    }
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+    return `${first}${last}`.toUpperCase();
+  }
+
+  function handlePhotoChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ): void {
+    const file = event.target.files?.[0];
+    if (!file) {
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+      setSelectedPhotoFile(null);
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setPhotoError("Only JPG, PNG, or WebP images are allowed.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError("Image must be smaller than 2MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setPhotoError(null);
+    setSelectedPhotoFile(file);
+    if (photoPreviewUrl) {
+      URL.revokeObjectURL(photoPreviewUrl);
+    }
+    setPhotoPreviewUrl(URL.createObjectURL(file));
+  }
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
 
   return (
     <main className={styles.page}>
       <section className={styles.card}>
         <header className={styles.header}>
-          <p className={styles.eyebrow}>Profile</p>
-          <h1>Edit your profile</h1>
-          <p className={styles.subhead}>
-            Keep your public profile concise and professional.
-          </p>
+          <div className={styles.headerRow}>
+            <div>
+              <p className={styles.eyebrow}>Profile</p>
+              <h1>Edit your profile</h1>
+              <p className={styles.subhead}>
+                Keep your public profile concise and professional.
+              </p>
+            </div>
+          </div>
         </header>
 
         {errorMessage ? <div className={styles.error}>{errorMessage}</div> : null}
         {message ? <div className={styles.success}>{message}</div> : null}
-        {verificationMessage ? (
-          <div className={styles.success}>{verificationMessage}</div>
-        ) : null}
-
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <section className={styles.photoSection}>
+          <div className={styles.photoHeader}>
+            <div>
+              <p className={styles.photoEyebrow}>Profile photo</p>
+              <h2>Profile photo</h2>
+              <p className={styles.photoSubhead}>
+                Upload a photo and save changes to apply it.
+              </p>
+            </div>
+          </div>
+          <div className={styles.photoRow}>
+            <div className={styles.avatar}>
+              {photoPreviewUrl ? (
+                <img
+                  className={styles.avatarImage}
+                  src={photoPreviewUrl}
+                  alt="Profile preview"
+                />
+              ) : profileImageUrl ? (
+                <img
+                  className={styles.avatarImage}
+                  src={profileImageUrl}
+                  alt="Profile photo"
+                />
+              ) : (
+                <span className={styles.avatarInitials}>
+                  {getInitials(fullName)}
+                </span>
+              )}
+            </div>
+            <div className={styles.photoMeta}>
+              <label className={`${styles.field} ${styles.photoField}`}>
+                Upload photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  disabled={isUploadingPhoto || isSubmitting}
+                />
+              </label>
+              <p className={styles.photoHint}>
+                Max size 2MB. The upload happens when you save changes.
+              </p>
+              {photoError ? (
+                <p className={styles.photoError}>{photoError}</p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+        <form className={styles.form} onSubmit={handleSubmit} id="identity">
           <label className={styles.field}>
             Headline
             <input
@@ -526,7 +716,7 @@ export default function ProfileEditPage(): JSX.Element {
             </select>
           </label>
           <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save changes"}
+            {isSubmitting || isUploadingPhoto ? "Saving..." : "Save changes"}
           </button>
         </form>
 
@@ -852,59 +1042,41 @@ export default function ProfileEditPage(): JSX.Element {
           </button>
         </section>
 
-        <div className={styles.verificationPanel}>
-          <p className={styles.verificationLabel}>Professional verification</p>
-          <p className={styles.verificationStatus}>{statusLabel}</p>
+        <section className={styles.verificationPanel} id="professional">
+          <div className={styles.verificationHeader}>
+            <div>
+              <p className={styles.verificationLabel}>Professional verification</p>
+              <p className={styles.verificationStatus}>Current status</p>
+            </div>
+            <span
+              className={`${styles.statusPill} ${
+                professionalDetails.tone === "verified"
+                  ? styles.badgeVerified
+                  : professionalDetails.tone === "pending"
+                  ? styles.badgePending
+                  : professionalDetails.tone === "rejected"
+                  ? styles.badgeRejected
+                  : styles.badgeMuted
+              }`}
+            >
+              {professionalDetails.label}
+            </span>
+          </div>
+          <p className={styles.verificationNote}>{professionalDetails.helper}</p>
 
-          {professionalStatus === PROFESSIONAL_STATUS.EMPTY ? (
+          {professionalDetails.actionLabel ? (
             <button
-              className={styles.secondaryButton}
+              className={styles.verificationButton}
               type="button"
               onClick={handleRequestVerification}
-              disabled={isRequesting}
-              title="Request AI-based verification for your professional profile."
+              disabled={isRequesting || professionalDetails.actionDisabled}
             >
-              {isRequesting
+              {isRequesting && !professionalDetails.actionDisabled
                 ? "Requesting verification..."
-                : "Request professional verification"}
+                : professionalDetails.actionLabel}
             </button>
           ) : null}
-
-          {professionalStatus === PROFESSIONAL_STATUS.PENDING ? (
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              disabled
-              title="Verification is in progress."
-            >
-              Verification in progress
-            </button>
-          ) : null}
-
-          {professionalStatus === PROFESSIONAL_STATUS.AI_VERIFIED ? (
-            <div className={styles.verificationSuccess}>
-              Your professional profile is verified by AI.
-            </div>
-          ) : null}
-
-          {professionalStatus === PROFESSIONAL_STATUS.REJECTED ? (
-            <div className={styles.verificationRejected}>
-              <p>Your professional verification was rejected.</p>
-              <button
-                className={styles.secondaryButton}
-                type="button"
-                onClick={handleRequestVerification}
-                disabled={isRequesting}
-                title="Update your profile and request a new verification."
-              >
-                {isRequesting
-                  ? "Requesting verification..."
-                  : "Request professional verification"}
-              </button>
-            </div>
-          ) : null}
-        </div>
-
+        </section>
         <div className={styles.footerLink}>
           <Link href="/profile">Back to profile</Link>
         </div>

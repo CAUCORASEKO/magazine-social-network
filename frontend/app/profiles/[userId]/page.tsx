@@ -12,12 +12,16 @@ import {
 interface PublicProfile {
   user_id: string;
   full_name: string;
+  profile_image_url: string | null;
   headline: string | null;
   bio: string | null;
   external_links: string[] | null;
   visibility: "public" | "private";
   identity_status: IdentityStatus;
+  identity_verified_at: string | null;
   professional_status: ProfessionalStatus;
+  professional_score: number | null;
+  professional_verified_at: string | null;
 }
 
 interface PublishedArticleSummary {
@@ -26,6 +30,10 @@ interface PublishedArticleSummary {
   published_at: string;
   author_user_id: string;
 }
+
+const SHOW_DEBUG_VERIFICATION = false;
+const showVerificationDebug =
+  process.env.NODE_ENV === "development" || SHOW_DEBUG_VERIFICATION;
 
 async function fetchProfile(userId: string): Promise<PublicProfile | null> {
   const response = await fetch(`${API_BASE_URL}/profiles/${userId}`, {
@@ -76,36 +84,37 @@ function getIdentityBadge(status: IdentityStatus): {
   label: string;
   tooltip: string;
   tone: "verified" | "pending" | "rejected" | "muted";
+  icon: "check" | "clock" | "x" | "dot";
 } {
   switch (status) {
     case IDENTITY_STATUS.VERIFIED:
       return {
         label: "Identity verified",
-        tooltip:
-          "Identity verified. You can publish and appear as a verified author.",
-        tone: "verified"
+        tooltip: "Identity verified.",
+        tone: "verified",
+        icon: "check"
       };
     case IDENTITY_STATUS.PENDING:
       return {
-        label: "Identity under review",
-        tooltip:
-          "Identity verification is in progress. You can edit your profile while we review.",
-        tone: "pending"
+        label: "Identity verification in progress",
+        tooltip: "We’re reviewing identity verification.",
+        tone: "pending",
+        icon: "clock"
       };
     case IDENTITY_STATUS.REJECTED:
       return {
-        label: "Identity verification failed",
-        tooltip:
-          "Identity verification failed. Update your profile details and request a new review.",
-        tone: "rejected"
+        label: "Identity verification rejected",
+        tooltip: "Identity verification was rejected.",
+        tone: "rejected",
+        icon: "x"
       };
     case IDENTITY_STATUS.UNVERIFIED:
     default:
       return {
         label: "Identity not verified",
-        tooltip:
-          "Identity not verified yet. Complete verification to publish articles.",
-        tone: "muted"
+        tooltip: "Identity verification has not been completed.",
+        tone: "muted",
+        icon: "dot"
       };
   }
 }
@@ -114,46 +123,111 @@ function getProfessionalBadge(status: ProfessionalStatus): {
   label: string;
   tooltip: string;
   tone: "verified" | "pending" | "rejected" | "muted";
+  icon: "check" | "clock" | "x" | "dot";
 } {
   switch (status) {
     case PROFESSIONAL_STATUS.AI_VERIFIED:
       return {
-        label: "Profession verified by AI",
-        tooltip:
-          "Professional profile verified by AI based on your public profile details.",
-        tone: "verified"
+        label: "Profession verified",
+        tooltip: "Professional verification is complete.",
+        tone: "verified",
+        icon: "check"
       };
     case PROFESSIONAL_STATUS.PENDING:
       return {
-        label: "Professional verification in progress",
-        tooltip:
-          "Professional verification is in progress. Keep your profile accurate and complete.",
-        tone: "pending"
+        label: "Verification in progress",
+        tooltip: "Professional verification is in progress.",
+        tone: "pending",
+        icon: "clock"
       };
     case PROFESSIONAL_STATUS.REJECTED:
       return {
-        label: "Professional verification rejected",
-        tooltip:
-          "Professional verification was rejected. Update your profile and request a new review.",
-        tone: "rejected"
+        label: "Verification rejected",
+        tooltip: "Professional verification was rejected.",
+        tone: "rejected",
+        icon: "x"
       };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
       return {
         label: "Profession not verified",
-        tooltip:
-          "Professional verification has not started. Request verification from your profile.",
-        tone: "muted"
+        tooltip: "Professional verification has not been requested.",
+        tone: "muted",
+        icon: "dot"
       };
   }
 }
 
-function formatIdentityLabel(status: IdentityStatus): string {
-  return getIdentityBadge(status).label;
+function BadgeIcon({ name }: { name: "check" | "clock" | "x" | "dot" }): JSX.Element {
+  switch (name) {
+    case "check":
+      return (
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M6.4 10.8 3.6 8l-1 1 3.8 3.8L13.6 5.6l-1-1z" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 1.2a5.3 5.3 0 1 1 0 10.6A5.3 5.3 0 0 1 8 2.7Zm-.5 2.2v3.6l2.9 1.7.6-1-2.3-1.3V4.9Z" />
+        </svg>
+      );
+    case "x":
+      return (
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M4.2 3 3 4.2 6.8 8 3 11.8 4.2 13l3.8-3.8 3.8 3.8 1.2-1.2L9.2 8 13 4.2 11.8 3 8 6.8Z" />
+        </svg>
+      );
+    case "dot":
+    default:
+      return (
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="3.2" />
+        </svg>
+      );
+  }
 }
 
-function formatProfessionalLabel(status: ProfessionalStatus): string {
-  return getProfessionalBadge(status).label;
+function getLinkLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (host.includes("linkedin.com")) {
+      return "LinkedIn";
+    }
+    if (host.includes("github.com")) {
+      return "GitHub";
+    }
+    if (host.includes("x.com") || host.includes("twitter.com")) {
+      return "X (Twitter)";
+    }
+    if (host.includes("medium.com")) {
+      return "Medium";
+    }
+    return "Website";
+  } catch {
+    return "Website";
+  }
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "";
+  }
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  return `${first}${last}`.toUpperCase();
+}
+
+function resolveProfileImageUrl(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+  if (url.startsWith("/")) {
+    return `${API_BASE_URL}${url}`;
+  }
+  return url;
 }
 
 export default async function ProfilePage({
@@ -180,9 +254,14 @@ export default async function ProfilePage({
 
   return (
     <main className={styles.page}>
-      <Link className={styles.backLink} href="/">
-        Back to feed
-      </Link>
+      <div className={styles.topBar}>
+        <Link className={styles.backLink} href="/">
+          Back to feed
+        </Link>
+        <Link className={styles.settingsLink} href="/profile/settings">
+          Settings
+        </Link>
+      </div>
 
       {errorMessage ? (
         <div className={styles.errorState}>{errorMessage}</div>
@@ -197,14 +276,33 @@ export default async function ProfilePage({
       {profile ? (
         <section className={styles.profile}>
           <header className={styles.header}>
-            <p className={styles.eyebrow}>Public profile</p>
-            <h1 className={styles.name}>{profile.full_name}</h1>
-            <div className={styles.badges}>
-              {(() => {
-                const badge = getIdentityBadge(profile.identity_status);
-                return (
-                  <span
-                    className={`${styles.badge} ${
+            <div className={styles.headerMain}>
+              <div className={styles.avatar}>
+                {resolveProfileImageUrl(profile.profile_image_url) ? (
+                  <img
+                    className={styles.avatarImage}
+                    src={resolveProfileImageUrl(profile.profile_image_url) ?? ""}
+                    alt={`${profile.full_name} profile`}
+                  />
+                ) : (
+                  <span className={styles.avatarInitials}>
+                    {getInitials(profile.full_name)}
+                  </span>
+                )}
+              </div>
+              <div className={styles.headerText}>
+                <h1 className={styles.name}>{profile.full_name}</h1>
+                {profile.headline ? (
+                  <p className={styles.headline}>{profile.headline}</p>
+                ) : null}
+                <div className={styles.badges}>
+                  {(() => {
+                    const badge = getIdentityBadge(profile.identity_status);
+                    const isVerified =
+                      profile.identity_status === IDENTITY_STATUS.VERIFIED;
+                    const className = `${styles.badge} ${
+                      isVerified ? styles.badgeSolid : styles.badgeOutline
+                    } ${
                       badge.tone === "verified"
                         ? styles.badgeVerified
                         : badge.tone === "pending"
@@ -212,18 +310,38 @@ export default async function ProfilePage({
                         : badge.tone === "rejected"
                         ? styles.badgeRejected
                         : styles.badgeMuted
-                    }`}
-                    title={badge.tooltip}
-                  >
-                    {badge.label}
-                  </span>
-                );
-              })()}
-              {(() => {
-                const badge = getProfessionalBadge(profile.professional_status);
-                return (
-                  <span
-                    className={`${styles.badge} ${
+                    } ${isVerified ? styles.badgeStatic : styles.badgeLink}`;
+                    if (isVerified) {
+                      return (
+                        <span className={className} title={badge.tooltip}>
+                          <span className={styles.badgeIcon}>
+                            <BadgeIcon name={badge.icon} />
+                          </span>
+                          {badge.label}
+                        </span>
+                      );
+                    }
+                    return (
+                      <Link
+                        className={className}
+                        title={badge.tooltip}
+                        href="/profile/verify-identity"
+                      >
+                        <span className={styles.badgeIcon}>
+                          <BadgeIcon name={badge.icon} />
+                        </span>
+                        {badge.label}
+                      </Link>
+                    );
+                  })()}
+                  {(() => {
+                    const badge = getProfessionalBadge(profile.professional_status);
+                    const isVerified =
+                      profile.professional_status ===
+                      PROFESSIONAL_STATUS.AI_VERIFIED;
+                    const className = `${styles.badge} ${
+                      isVerified ? styles.badgeSolid : styles.badgeOutline
+                    } ${
                       badge.tone === "verified"
                         ? styles.badgeVerified
                         : badge.tone === "pending"
@@ -231,31 +349,47 @@ export default async function ProfilePage({
                         : badge.tone === "rejected"
                         ? styles.badgeRejected
                         : styles.badgeMuted
-                    }`}
-                    title={badge.tooltip}
-                  >
-                    {badge.label}
-                  </span>
-                );
-              })()}
+                    } ${isVerified ? styles.badgeStatic : styles.badgeLink}`;
+                    if (isVerified) {
+                      return (
+                        <span className={className} title={badge.tooltip}>
+                          <span className={styles.badgeIcon}>
+                            <BadgeIcon name={badge.icon} />
+                          </span>
+                          {badge.label}
+                        </span>
+                      );
+                    }
+                    return (
+                      <Link
+                        className={className}
+                        title={badge.tooltip}
+                        href="/profile/edit"
+                      >
+                        <span className={styles.badgeIcon}>
+                          <BadgeIcon name={badge.icon} />
+                        </span>
+                        {badge.label}
+                      </Link>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
-            {profile.headline ? (
-              <p className={styles.headline}>{profile.headline}</p>
-            ) : null}
           </header>
-          <div className={styles.statusRow}>
-            <span>Identity status: {formatIdentityLabel(profile.identity_status)}</span>
-            <span>
-              Professional status: {formatProfessionalLabel(profile.professional_status)}
-            </span>
-          </div>
+          {showVerificationDebug && profile.professional_score !== null ? (
+            <div className={styles.debugBlock}>
+              Verification score (debug): {profile.professional_score}
+            </div>
+          ) : null}
           {profile.bio ? <p className={styles.bio}>{profile.bio}</p> : null}
           {profile.external_links && profile.external_links.length > 0 ? (
             <div className={styles.links}>
               <p className={styles.linksTitle}>External links</p>
               <ul className={styles.linkList}>
-                {profile.external_links.map((link) => (
-                  <li key={link}>
+                {profile.external_links.map((link, index) => (
+                  <li key={`${link}-${index}`}>
+                    <span className={styles.linkLabel}>{getLinkLabel(link)}</span>
                     <a href={link} target="_blank" rel="noreferrer">
                       {link}
                     </a>

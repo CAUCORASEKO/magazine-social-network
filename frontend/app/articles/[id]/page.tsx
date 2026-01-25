@@ -20,8 +20,15 @@ interface ArticleDetail {
 
 interface PublicProfileSnippet {
   identity_status: IdentityStatus;
+  identity_verified_at: string | null;
   professional_status: ProfessionalStatus;
+  professional_score: number | null;
+  professional_verified_at: string | null;
 }
+
+const SHOW_DEBUG_VERIFICATION = false;
+const showVerificationDebug =
+  process.env.NODE_ENV === "development" || SHOW_DEBUG_VERIFICATION;
 
 type MarkdownBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
@@ -40,6 +47,17 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "long"
   }).format(date);
+}
+
+function formatIsoDate(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString().slice(0, 10);
 }
 
 function parseMarkdown(source: string): MarkdownBlock[] {
@@ -158,29 +176,26 @@ function getIdentityBadge(status: IdentityStatus): {
     case IDENTITY_STATUS.VERIFIED:
       return {
         label: "Identity verified",
-        tooltip: "Identity verified. This author can publish as verified.",
+        tooltip: "Identity verified.",
         tone: "verified"
       };
     case IDENTITY_STATUS.PENDING:
       return {
-        label: "Identity under review",
-        tooltip:
-          "Identity verification is in progress. Publishing is restricted until approved.",
+        label: "Identity verification in progress",
+        tooltip: "We’re reviewing identity verification.",
         tone: "pending"
       };
     case IDENTITY_STATUS.REJECTED:
       return {
         label: "Identity verification failed",
-        tooltip:
-          "Identity verification failed. The author must update details to retry.",
+        tooltip: "Identity verification failed.",
         tone: "rejected"
       };
     case IDENTITY_STATUS.UNVERIFIED:
     default:
       return {
         label: "Identity not verified",
-        tooltip:
-          "Identity not verified yet. This author has not completed identity checks.",
+        tooltip: "Identity verification has not been completed.",
         tone: "muted"
       };
   }
@@ -194,32 +209,90 @@ function getProfessionalBadge(status: ProfessionalStatus): {
   switch (status) {
     case PROFESSIONAL_STATUS.AI_VERIFIED:
       return {
-        label: "Profession verified by AI",
-        tooltip:
-          "Professional profile verified by AI based on profile completeness.",
+        label: "Profession verified",
+        tooltip: "Professional verification is complete.",
         tone: "verified"
       };
     case PROFESSIONAL_STATUS.PENDING:
       return {
-        label: "Professional verification in progress",
-        tooltip:
-          "Professional verification is in progress. Results will appear here.",
+        label: "Verification in progress",
+        tooltip: "Professional verification is in progress.",
         tone: "pending"
       };
     case PROFESSIONAL_STATUS.REJECTED:
       return {
-        label: "Professional verification rejected",
-        tooltip:
-          "Professional verification was rejected. The author can request a review.",
+        label: "Verification rejected",
+        tooltip: "Professional verification was rejected.",
         tone: "rejected"
       };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
       return {
         label: "Profession not verified",
-        tooltip:
-          "Professional verification has not started. The author can request it.",
+        tooltip: "Professional verification has not been requested.",
         tone: "muted"
+      };
+  }
+}
+
+function getIdentityDetails(
+  status: IdentityStatus,
+  verifiedAt: string | null
+): { label: string; subtext: string } {
+  switch (status) {
+    case IDENTITY_STATUS.VERIFIED: {
+      const verifiedOn = formatIsoDate(verifiedAt);
+      return {
+        label: "Identity verified",
+        subtext: verifiedOn ? `Verified on: ${verifiedOn}` : "Identity verified"
+      };
+    }
+    case IDENTITY_STATUS.PENDING:
+      return {
+        label: "Identity verification in progress",
+        subtext: "We’re reviewing your identity"
+      };
+    case IDENTITY_STATUS.REJECTED:
+      return {
+        label: "Identity verification failed",
+        subtext: "Please update your information and retry"
+      };
+    case IDENTITY_STATUS.UNVERIFIED:
+    default:
+      return {
+        label: "Identity not verified",
+        subtext: "Verify your identity to unlock publishing"
+      };
+  }
+}
+
+function getProfessionalDetails(
+  status: ProfessionalStatus,
+  verifiedAt: string | null
+): { label: string; subtext: string } {
+  switch (status) {
+    case PROFESSIONAL_STATUS.AI_VERIFIED: {
+      const verifiedOn = formatIsoDate(verifiedAt);
+      return {
+        label: "Profession verified",
+        subtext: verifiedOn ? `Verified on: ${verifiedOn}` : "Profession verified"
+      };
+    }
+    case PROFESSIONAL_STATUS.PENDING:
+      return {
+        label: "Verification in progress",
+        subtext: "AI review in progress"
+      };
+    case PROFESSIONAL_STATUS.REJECTED:
+      return {
+        label: "Verification rejected",
+        subtext: "Improve your profile and retry"
+      };
+    case PROFESSIONAL_STATUS.EMPTY:
+    default:
+      return {
+        label: "Profession not verified",
+        subtext: "Complete your CV and request verification"
       };
   }
 }
@@ -344,8 +417,41 @@ export default async function ArticlePage({
                   })()}
                 </span>
               ) : null}
+              {authorProfile ? (
+                <div className={styles.verificationDetails}>
+                  {(() => {
+                    const details = getIdentityDetails(
+                      authorProfile.identity_status,
+                      authorProfile.identity_verified_at
+                    );
+                    return (
+                      <span className={styles.verificationLine}>
+                        {details.label} — {details.subtext}
+                      </span>
+                    );
+                  })()}
+                  {(() => {
+                    const details = getProfessionalDetails(
+                      authorProfile.professional_status,
+                      authorProfile.professional_verified_at
+                    );
+                    return (
+                      <span className={styles.verificationLine}>
+                        {details.label} — {details.subtext}
+                      </span>
+                    );
+                  })()}
+                </div>
+              ) : null}
               <span>Magazine: {article.magazine_id}</span>
             </div>
+            {authorProfile &&
+            showVerificationDebug &&
+            authorProfile.professional_score !== null ? (
+              <div className={styles.debugBlock}>
+                Verification score (debug): {authorProfile.professional_score}
+              </div>
+            ) : null}
           </header>
           <div className={styles.body}>
             {parseMarkdown(article.body).map((block, idx) => {

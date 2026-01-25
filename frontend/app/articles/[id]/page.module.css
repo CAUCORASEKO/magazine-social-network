@@ -55,6 +55,27 @@
   padding-top: 1.2rem;
 }
 
+.debugBlock {
+  font-size: 0.8rem;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  align-self: flex-start;
+}
+
+.verificationDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.verificationLine {
+  display: block;
+}
+
 .meta a {
   color: var(--accent-strong);
   font-weight: 600;

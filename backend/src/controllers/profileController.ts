@@ -1,8 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
-
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import {
   getProfileByUserId,
   updateProfessionalVerificationStatus,
+  updateProfileImageUrl,
   upsertUserProfileByUserId
 } from "../repositories/userProfileRepository";
 import { findUserById } from "../repositories/userRepository";
@@ -18,6 +20,7 @@ interface UpsertProfileBody {
   bio?: unknown;
   external_links?: unknown;
   visibility?: unknown;
+  profile_image_url?: unknown;
 }
 
 export async function getPublicProfileHandler(
@@ -137,11 +140,42 @@ export async function upsertMyProfileHandler(
       return;
     }
 
+    let profileImageUrl: string | null | undefined;
+    if (body.profile_image_url !== undefined) {
+      if (body.profile_image_url === null || body.profile_image_url === "") {
+        profileImageUrl = null;
+      } else if (typeof body.profile_image_url !== "string") {
+        res.status(400).json({ error: "Profile image URL must be a string" });
+        return;
+      } else {
+        const trimmed = body.profile_image_url.trim();
+        if (!trimmed) {
+          profileImageUrl = null;
+        } else if (trimmed.startsWith("/")) {
+          profileImageUrl = trimmed;
+        } else {
+          try {
+            const parsed = new URL(trimmed);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              throw new Error("Profile image URL must be http or https");
+            }
+            profileImageUrl = trimmed;
+          } catch {
+            res.status(400).json({ error: "Profile image URL must be a valid URL" });
+            return;
+          }
+        }
+      }
+    }
+
     const profile = await upsertUserProfileByUserId(req.user.id, {
       headline,
       bio,
       external_links: externalLinks,
-      visibility: body.visibility
+      visibility: body.visibility,
+      ...(body.profile_image_url !== undefined
+        ? { profile_image_url: profileImageUrl ?? null }
+        : {})
     });
 
     res.json(profile);
@@ -179,19 +213,73 @@ export async function requestProfessionalVerificationHandler(
     }
 
     if (profile.professional_status !== PROFESSIONAL_STATUS.EMPTY) {
-      res.status(400).json({ error: "Professional verification already requested" });
+      res.status(400).json({
+        error: "Professional verification can only be requested when status is empty"
+      });
       return;
     }
 
-    const updated = await updateProfessionalVerificationStatus(req.user.id, {
-      professional_status: PROFESSIONAL_STATUS.PENDING,
-      professional_score: null,
-      professional_verified_at: null
-    });
+    const updated = await updateProfessionalVerificationStatus(
+      req.user.id,
+      {
+        professional_status: PROFESSIONAL_STATUS.PENDING,
+        professional_score: null,
+        professional_verified_at: null
+      }
+    );
 
-    res.json(updated);
+    res.json({ professional_status: updated.professional_status });
   } catch (error) {
     next(error);
+  }
+}
+
+export async function uploadProfilePhotoHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "Photo file is required" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(req.user.id);
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    const profileImageUrl = `/uploads/profile-images/${file.filename}`;
+    await updateProfileImageUrl(req.user.id, profileImageUrl);
+
+    if (profile.profile_image_url && profile.profile_image_url !== profileImageUrl) {
+      await removeLocalProfileImage(profile.profile_image_url);
+    }
+
+    res.json({ profile_image_url: profileImageUrl });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function removeLocalProfileImage(url: string): Promise<void> {
+  if (!url.startsWith("/uploads/")) {
+    return;
+  }
+  const relativePath = url.replace(/^\/uploads\//, "");
+  const filePath = path.join(process.cwd(), "uploads", relativePath);
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    return;
   }
 }
 

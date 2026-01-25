@@ -12,7 +12,7 @@ mechanics.
 - Text-first
 - Long-form
 - Editorial scope
-- Real identities
+- Real identities (professional accountability)
 - Multilingual separation
 
 ## Current Scope (MVP)
@@ -41,6 +41,53 @@ mechanics.
 - Backend: Express API in Node.js + TypeScript, PostgreSQL, raw SQL migrations
 - Frontend: Next.js read-only UI consuming the public API
 - Architecture details: `docs/architecture.md`
+
+## Professional Verification (AI-assisted)
+
+Goal:
+- Ensure users are who they claim to be professionally
+- Scale verification beyond manual review
+- Keep a clear, auditable state machine
+
+Professional verification state machine:
+- `empty`
+- `pending`
+- `ai_verified`
+- `rejected`
+
+End-to-end flow in phases:
+Phase A — Profile & CV data collection
+- Capture structured profile details and career history in a format suitable for automated analysis.
+
+Phase B — Verification request
+- Users explicitly request verification, creating a request record independent of profile edits.
+
+Phase C — AI-assisted analysis (deterministic, explainable)
+- Analysis evaluates consistency and professional plausibility using deterministic checks and explainable signals.
+
+Phase D — Post-verification actions
+- The system records the outcome and propagates a stable verification status without altering core profile data.
+
+Design principles:
+- Decoupled flows (request, analysis, post-actions)
+- AI never directly mutates core user data
+- All transitions are validated
+- Human-readable reasons are always stored
+
+Scope:
+- This is a demo-grade but production-inspired architecture
+- No real identity documents are processed
+- AI decisions are explainable and reversible
+
+### Why this matters for enterprise platforms
+
+This verification model mirrors common enterprise requirements where trust, traceability,
+and explainability matter more than automation speed.
+
+- Scalability
+- Governance
+- Trust
+- Auditability
 
 ## Repository Structure
 

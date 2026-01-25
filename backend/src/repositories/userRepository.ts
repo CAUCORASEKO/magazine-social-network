@@ -119,3 +119,15 @@ export async function updateAccountStatus(
 
   return result.rows[0];
 }
+
+export async function deleteUserById(userId: string): Promise<boolean> {
+  const result = await pool.query(
+    `
+    DELETE FROM users
+    WHERE id = $1
+    `,
+    [userId]
+  );
+
+  return result.rowCount > 0;
+}

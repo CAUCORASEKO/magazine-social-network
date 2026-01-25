@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express, { type NextFunction, type Request, type Response } from "express";
+import fs from "node:fs";
+import path from "node:path";
 import session from "express-session";
 import cors from "cors";
 
@@ -14,6 +16,9 @@ import { onboardingRouter } from "./routes/onboarding";
 export const app = express();
 
 app.use(express.json({ limit: "1mb" }));
+const uploadsDir = path.join(__dirname, "../uploads");
+fs.mkdirSync(uploadsDir, { recursive: true });
+app.use("/uploads", express.static(uploadsDir));
 app.use(
   cors({
     origin: config.frontendOrigin,

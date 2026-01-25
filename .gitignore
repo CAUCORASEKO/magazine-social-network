@@ -18,3 +18,5 @@ build/
 # Cookies / local debug
 cookies.txt
 .next/
+
+backend/uploads/

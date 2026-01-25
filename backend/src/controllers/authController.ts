@@ -9,7 +9,7 @@ import {
   verifyEmailByToken
 } from "../repositories/authRepository";
 import { findLanguageByCode } from "../repositories/languageRepository";
-import { findUserById } from "../repositories/userRepository";
+import { deleteUserById, findUserById } from "../repositories/userRepository";
 import { getProfileByUserId } from "../repositories/userProfileRepository";
 
 interface RegisterBody {
@@ -177,6 +177,55 @@ export async function logoutHandler(
   }
 }
 
+export async function deleteAccountHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const body = req.body as { password?: string };
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!password) {
+      res.status(400).json({ error: "Password is required" });
+      return;
+    }
+
+    const credential = await findAuthCredentialByUserId(userId);
+    if (!credential) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const matches = await bcrypt.compare(password, credential.password_hash);
+    if (!matches) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+
+    const deleted = await deleteUserById(userId);
+    if (!deleted) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    req.session.destroy((err) => {
+      if (err) {
+        next(err);
+        return;
+      }
+      res.json({ success: true });
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function meHandler(
   req: Request,
   res: Response,
@@ -206,7 +255,14 @@ export async function meHandler(
     res.json({
       ...user,
       email_verified: credential.email_verified,
-      ...(profile ? { professional_status: profile.professional_status } : {})
+      ...(profile
+        ? {
+            profile_image_url: profile.profile_image_url,
+            professional_status: profile.professional_status,
+            professional_score: profile.professional_score,
+            professional_verified_at: profile.professional_verified_at
+          }
+        : {})
     });
   } catch (error) {
     next(error);
