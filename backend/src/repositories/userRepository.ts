@@ -131,3 +131,64 @@ export async function deleteUserById(userId: string): Promise<boolean> {
 
   return result.rowCount > 0;
 }
+
+export async function updateIdentityStatus(
+  userId: string,
+  status: User["identity_status"]
+): Promise<User> {
+  const result = await pool.query<User>(
+    `
+    UPDATE users
+    SET identity_status = $2,
+        identity_verified_at = NULL,
+        identity_score = NULL
+    WHERE id = $1
+    RETURNING
+      id,
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country,
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
+    `,
+    [userId, status]
+  );
+
+  return result.rows[0];
+}
+
+export async function updateIdentityVerificationOutcome(
+  userId: string,
+  params: {
+    status: "verified" | "rejected";
+    verifiedAt: string | null;
+  }
+): Promise<User> {
+  const result = await pool.query<User>(
+    `
+    UPDATE users
+    SET identity_status = $2,
+        identity_verified_at = $3,
+        identity_score = NULL
+    WHERE id = $1
+    RETURNING
+      id,
+      full_name,
+      email,
+      professional_background,
+      ui_language_id,
+      country,
+      account_status,
+      identity_status,
+      identity_verified_at,
+      identity_score
+    `,
+    [userId, params.status, params.verifiedAt]
+  );
+
+  return result.rows[0];
+}

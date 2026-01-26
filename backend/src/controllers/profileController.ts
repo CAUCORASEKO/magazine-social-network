@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { promises as fs } from "node:fs";
+import { promises as fs, constants as fsConstants } from "node:fs";
 import path from "node:path";
 import {
   getProfileByUserId,
@@ -7,8 +7,17 @@ import {
   updateProfileImageUrl,
   upsertUserProfileByUserId
 } from "../repositories/userProfileRepository";
-import { findUserById } from "../repositories/userRepository";
-import { PROFESSIONAL_STATUS } from "../constants/verification";
+import {
+  findUserById,
+  updateIdentityStatus,
+  updateIdentityVerificationOutcome
+} from "../repositories/userRepository";
+import { IDENTITY_STATUS, PROFESSIONAL_STATUS } from "../constants/verification";
+import {
+  createIdentityDocument,
+  deleteIdentityDocumentsByUserId,
+  getIdentityDocumentsByUserId
+} from "../repositories/identityDocumentRepository";
 import {
   getProfileCvByUserId,
   upsertProfileCvByUserId,
@@ -270,12 +279,152 @@ export async function uploadProfilePhotoHandler(
   }
 }
 
+export async function uploadIdentityDocumentHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "Document file is required" });
+      return;
+    }
+
+    const user = await findUserById(req.user.id);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const uploadsRoot = path.join(process.cwd(), "uploads");
+    const relativePath = path.relative(uploadsRoot, file.path);
+    const normalizedPath = relativePath.split(path.sep).join("/");
+    const uploadedAt = new Date().toISOString();
+
+    await createIdentityDocument({
+      userId: req.user.id,
+      fileName: file.filename,
+      fileType: file.mimetype,
+      filePath: normalizedPath,
+      uploadedAt
+    });
+
+    const updated = await updateIdentityStatus(
+      req.user.id,
+      IDENTITY_STATUS.DOCUMENT_UPLOADED
+    );
+
+    res.json({
+      identity_status: updated.identity_status
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyFaceHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "Face capture is required" });
+      return;
+    }
+
+    const user = await findUserById(req.user.id);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (
+      user.identity_status !== IDENTITY_STATUS.DOCUMENT_UPLOADED &&
+      user.identity_status !== IDENTITY_STATUS.FACE_VERIFICATION
+    ) {
+      res.status(400).json({ error: "Identity verification is not ready yet" });
+      return;
+    }
+
+    let approved = false;
+    try {
+      await fs.access(file.path, fsConstants.R_OK);
+      approved = true;
+    } catch {
+      approved = false;
+    }
+
+    const verifiedAt = approved ? new Date().toISOString() : null;
+    const updated = await updateIdentityVerificationOutcome(user.id, {
+      status: approved ? IDENTITY_STATUS.VERIFIED : IDENTITY_STATUS.REJECTED,
+      verifiedAt
+    });
+
+    await cleanupIdentityArtifacts(user.id, file.path);
+
+    res.json({ identity_status: updated.identity_status });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function removeLocalProfileImage(url: string): Promise<void> {
   if (!url.startsWith("/uploads/")) {
     return;
   }
   const relativePath = url.replace(/^\/uploads\//, "");
   const filePath = path.join(process.cwd(), "uploads", relativePath);
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    return;
+  }
+}
+
+async function cleanupIdentityArtifacts(
+  userId: string,
+  facePath: string
+): Promise<void> {
+  const uploadsRoot = path.join(process.cwd(), "uploads");
+  try {
+    const docs = await getIdentityDocumentsByUserId(userId);
+    for (const doc of docs) {
+      if (!doc.file_path) {
+        continue;
+      }
+      const normalizedPath = doc.file_path.startsWith("/")
+        ? doc.file_path.slice(1)
+        : doc.file_path;
+      const docPath = path.join(uploadsRoot, normalizedPath);
+      await safeUnlink(docPath);
+    }
+  } catch {
+    // ignore cleanup errors
+  }
+
+  await safeUnlink(facePath);
+
+  try {
+    await deleteIdentityDocumentsByUserId(userId);
+  } catch {
+    return;
+  }
+}
+
+async function safeUnlink(filePath: string): Promise<void> {
   try {
     await fs.unlink(filePath);
   } catch {

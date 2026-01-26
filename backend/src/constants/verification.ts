@@ -1,5 +1,7 @@
 export const IDENTITY_STATUS = {
   UNVERIFIED: "unverified",
+  DOCUMENT_UPLOADED: "document_uploaded",
+  FACE_VERIFICATION: "face_verification",
   PENDING: "pending",
   VERIFIED: "verified",
   REJECTED: "rejected"

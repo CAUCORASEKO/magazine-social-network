@@ -1,0 +1,278 @@
+.page {
+  padding: 3.5rem clamp(1.5rem, 6vw, 5rem) 5rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.card {
+  background: var(--paper);
+  border-radius: 22px;
+  padding: clamp(2.6rem, 5vw, 3.6rem);
+  box-shadow: 0 18px 48px rgba(33, 32, 28, 0.08);
+  max-width: 50rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.7rem;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  margin: 0;
+  color: var(--ink);
+}
+
+.subhead {
+  font-size: 1rem;
+  color: var(--muted);
+  max-width: 38rem;
+  line-height: 1.6;
+}
+
+.uploadArea {
+  border-radius: 18px;
+  padding: 1.2rem;
+  border: 1px dashed rgba(217, 210, 198, 0.8);
+  background: rgba(255, 255, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fileInput {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.2rem;
+  border-radius: 14px;
+  border: 1px solid rgba(217, 210, 198, 0.6);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+}
+
+.fileField {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fileSummary {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.uploadHint {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.loading {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.fileLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.fileName {
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.previewBox {
+  border-radius: 16px;
+  border: 1px solid rgba(217, 210, 198, 0.6);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.8rem;
+}
+
+.previewImage {
+  display: block;
+  width: 180px;
+  height: auto;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.primaryButton {
+  border: none;
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.9rem 1.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 10px 22px rgba(32, 62, 53, 0.18);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.primaryButton:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.error {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: rgba(203, 67, 53, 0.1);
+  color: #8f3327;
+  border-radius: 12px;
+  border: 1px solid rgba(203, 67, 53, 0.2);
+}
+
+.success {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: rgba(47, 93, 80, 0.12);
+  color: var(--accent-strong);
+  border-radius: 12px;
+  border: 1px solid rgba(47, 93, 80, 0.25);
+}
+
+.infoCard {
+  border-radius: 16px;
+  padding: 1.2rem;
+  border: 1px solid rgba(217, 210, 198, 0.7);
+  background: rgba(255, 255, 255, 0.75);
+  display: grid;
+  gap: 0.6rem;
+}
+
+.infoTitle {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.infoCopy {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.secondaryButton {
+  border: 1px solid rgba(32, 62, 53, 0.3);
+  background: transparent;
+  color: var(--accent-strong);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.75rem 1.4rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.secondaryButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(32, 62, 53, 0.12);
+}
+
+.faceStep {
+  display: grid;
+  gap: 1rem;
+}
+
+.faceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.videoShell {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgba(217, 210, 198, 0.7);
+  background: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.videoPlaceholder {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.processingOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(31, 29, 25, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.instructions {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.instruction {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.instructionActive {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 700px) {
+  .faceHeader {
+    align-items: flex-start;
+  }
+}
+
+.backLink {
+  font-size: 0.9rem;
+  color: var(--accent-strong);
+  font-weight: 600;
+  text-decoration: none;
+}

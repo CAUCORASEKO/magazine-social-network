@@ -173,6 +173,18 @@ function getIdentityBadge(status: IdentityStatus): {
   tone: "verified" | "pending" | "rejected" | "muted";
 } {
   switch (status) {
+    case IDENTITY_STATUS.DOCUMENT_UPLOADED:
+      return {
+        label: "Document received",
+        tooltip: "Identity document received. Facial verification is next.",
+        tone: "pending"
+      };
+    case IDENTITY_STATUS.FACE_VERIFICATION:
+      return {
+        label: "Facial verification required",
+        tooltip: "Facial verification is required to complete identity checks.",
+        tone: "pending"
+      };
     case IDENTITY_STATUS.VERIFIED:
       return {
         label: "Identity verified",

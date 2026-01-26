@@ -87,6 +87,20 @@ function getIdentityBadge(status: IdentityStatus): {
   icon: "check" | "clock" | "x" | "dot";
 } {
   switch (status) {
+    case IDENTITY_STATUS.DOCUMENT_UPLOADED:
+      return {
+        label: "Document received",
+        tooltip: "Identity document received. Facial verification is next.",
+        tone: "pending",
+        icon: "clock"
+      };
+    case IDENTITY_STATUS.FACE_VERIFICATION:
+      return {
+        label: "Facial verification required",
+        tooltip: "Facial verification is required to complete identity checks.",
+        tone: "pending",
+        icon: "clock"
+      };
     case IDENTITY_STATUS.VERIFIED:
       return {
         label: "Identity verified",
