@@ -10,6 +10,12 @@ export interface CreateDraftArticleInput {
   body: string;
 }
 
+export interface UpdateDraftArticleInput {
+  article_id: string;
+  title: string;
+  body: string;
+}
+
 export interface ArticleLifecycleRecord {
   id: string;
   magazine_id: string;
@@ -43,6 +49,34 @@ export interface PublicArticleFeedItem {
   magazine_id: string;
   topic_id: string;
   language_id: string;
+}
+
+export async function findDraftByAuthorAndMagazine(
+  authorUserId: string,
+  magazineId: string
+): Promise<ArticleLifecycleRecord | null> {
+  const result = await pool.query<ArticleLifecycleRecord>(
+    `
+    SELECT
+      id,
+      magazine_id,
+      author_user_id,
+      language_id,
+      topic_id,
+      status,
+      created_at,
+      published_at
+    FROM articles
+    WHERE author_user_id = $1
+      AND magazine_id = $2
+      AND status = 'draft'
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [authorUserId, magazineId]
+  );
+
+  return result.rows[0] ?? null;
 }
 
 export async function createDraftArticle(
@@ -112,6 +146,77 @@ export async function createDraftArticle(
   }
 }
 
+export async function updateDraftArticle(
+  input: UpdateDraftArticleInput
+): Promise<Article> {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const articleResult = await client.query<ArticleLifecycleRecord>(
+      `
+      SELECT
+        id,
+        magazine_id,
+        author_user_id,
+        language_id,
+        topic_id,
+        status,
+        created_at,
+        published_at
+      FROM articles
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [input.article_id]
+    );
+
+    const article = articleResult.rows[0];
+    if (!article) {
+      throw new Error("Article not found");
+    }
+
+    const versionResult = await client.query<{ next_version: number }>(
+      `
+      SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version
+      FROM article_versions
+      WHERE article_id = $1
+      `,
+      [input.article_id]
+    );
+
+    const nextVersion = versionResult.rows[0]?.next_version ?? 1;
+
+    const versionInsert = await client.query<{ title: string; body: string }>(
+      `
+      INSERT INTO article_versions (
+        article_id,
+        version_number,
+        title,
+        body
+      )
+      VALUES ($1, $2, $3, $4)
+      RETURNING title, body
+      `,
+      [input.article_id, nextVersion, input.title, input.body]
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      ...article,
+      title: versionInsert.rows[0].title,
+      body: versionInsert.rows[0].body
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function findArticleById(
   id: string
 ): Promise<ArticleLifecycleRecord | null> {
@@ -160,6 +265,19 @@ export async function updateArticleStatus(
   );
 
   return result.rows[0];
+}
+
+export async function submitArticle(
+  id: string
+): Promise<ArticleLifecycleRecord> {
+  return updateArticleStatus(id, "submitted", null);
+}
+
+export async function publishArticle(
+  id: string,
+  publishedAt: string
+): Promise<ArticleLifecycleRecord> {
+  return updateArticleStatus(id, "published", publishedAt);
 }
 
 export async function listPublishedArticlesByMagazine(

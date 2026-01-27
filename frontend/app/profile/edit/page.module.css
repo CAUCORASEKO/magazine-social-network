@@ -169,6 +169,19 @@
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
+.secondaryButton {
+  border-radius: 999px;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
 .cvSection {
   display: flex;
   flex-direction: column;
@@ -195,6 +208,47 @@
   color: var(--muted);
   line-height: 1.6;
   font-size: 0.95rem;
+}
+
+.cvUpload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff7eb;
+}
+
+.cvUploadTitle {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.cvUploadHint {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cvUploadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.cvUploadField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.cvUploadField input {
+  font-size: 0.9rem;
 }
 
 .cvBlock {

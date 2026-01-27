@@ -71,6 +71,78 @@ export async function createMagazine(
   return result.rows[0];
 }
 
+export async function listMagazinesByOwner(
+  ownerUserId: string
+): Promise<Magazine[]> {
+  const result = await pool.query<Magazine>(
+    `
+    SELECT
+      id,
+      title,
+      description,
+      primary_topic_id,
+      primary_language_id,
+      owner_user_id,
+      status,
+      created_at
+    FROM magazines
+    WHERE owner_user_id = $1
+      AND status = 'active'
+    ORDER BY created_at DESC
+    `,
+    [ownerUserId]
+  );
+
+  return result.rows;
+}
+
+export async function findDefaultMagazineByOwner(
+  ownerUserId: string
+): Promise<Magazine | null> {
+  const result = await pool.query<Magazine>(
+    `
+    SELECT
+      id,
+      title,
+      description,
+      primary_topic_id,
+      primary_language_id,
+      owner_user_id,
+      status,
+      created_at
+    FROM magazines
+    WHERE owner_user_id = $1
+      AND status = 'active'
+    ORDER BY created_at ASC
+    LIMIT 1
+    `,
+    [ownerUserId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function ensureDefaultMagazineForUser(params: {
+  owner_user_id: string;
+  primary_topic_id: string;
+  primary_language_id: string;
+  title: string;
+  description: string | null;
+}): Promise<Magazine> {
+  const existing = await findDefaultMagazineByOwner(params.owner_user_id);
+  if (existing) {
+    return existing;
+  }
+
+  return createMagazine({
+    title: params.title,
+    description: params.description,
+    primary_topic_id: params.primary_topic_id,
+    primary_language_id: params.primary_language_id,
+    owner_user_id: params.owner_user_id
+  });
+}
+
 export async function listActiveMagazines(): Promise<Magazine[]> {
   const result = await pool.query<Magazine>(
     `

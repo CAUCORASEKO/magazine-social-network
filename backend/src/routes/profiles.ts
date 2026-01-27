@@ -6,9 +6,12 @@ import fs from "node:fs";
 import {
   getPublicProfileHandler,
   getProfileCvHandler,
+  getPublicProfileCvHandler,
   requestProfessionalVerificationHandler,
+  removeProfileCvHandler,
   uploadIdentityDocumentHandler,
   uploadProfilePhotoHandler,
+  uploadProfileCvHandler,
   verifyFaceHandler,
   upsertProfileCvHandler,
   upsertMyProfileHandler
@@ -123,6 +126,30 @@ const faceUpload = multer({
   }
 });
 
+const cvUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const userId = typeof req.user?.id === "string" ? req.user.id : "user";
+      const cvDir = path.join(__dirname, "..", "..", "uploads", "cv", userId);
+      fs.mkdirSync(cvDir, { recursive: true });
+      cb(null, cvDir);
+    },
+    filename: (_req, _file, cb) => {
+      cb(null, `cv-${Date.now()}.pdf`);
+    }
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      cb(new Error("Only PDF files are allowed"));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
 function handleProfilePhotoUpload(
   req: Request,
   res: Response,
@@ -185,10 +212,36 @@ function handleFaceUpload(req: Request, res: Response, next: NextFunction): void
   });
 }
 
+function handleCvUpload(req: Request, res: Response, next: NextFunction): void {
+  cvUpload.single("cv")(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: "CV must be smaller than 10MB" });
+        return;
+      }
+      res.status(400).json({ error: "Invalid upload" });
+      return;
+    }
+    res.status(400).json({ error: err.message || "Invalid upload" });
+  });
+}
+
 profilesRouter.get("/profiles/:userId", getPublicProfileHandler);
+profilesRouter.get("/profiles/:userId/cv", getPublicProfileCvHandler);
 profilesRouter.put("/profiles/me", requireAuth, upsertMyProfileHandler);
 profilesRouter.get("/profile/cv", requireAuth, getProfileCvHandler);
 profilesRouter.put("/profile/cv", requireAuth, upsertProfileCvHandler);
+profilesRouter.delete("/profile/cv", requireAuth, removeProfileCvHandler);
+profilesRouter.post(
+  "/profile/cv/upload",
+  requireAuth,
+  handleCvUpload,
+  uploadProfileCvHandler
+);
 profilesRouter.post(
   "/profile/photo",
   requireAuth,

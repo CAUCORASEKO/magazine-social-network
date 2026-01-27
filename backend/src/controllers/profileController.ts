@@ -23,6 +23,7 @@ import {
   upsertProfileCvByUserId,
   type ProfileCvPayload
 } from "../repositories/profileCvRepository";
+import { extractTextFromPdf, parseCvText } from "../services/cvParsingService";
 
 interface UpsertProfileBody {
   headline?: unknown;
@@ -221,23 +222,25 @@ export async function requestProfessionalVerificationHandler(
       return;
     }
 
-    if (profile.professional_status !== PROFESSIONAL_STATUS.EMPTY) {
+    const cv = await getProfileCvByUserId(req.user.id);
+    const hasData =
+      Boolean(profile.headline) || Boolean(profile.bio) || hasCvData(cv);
+    if (!hasData) {
       res.status(400).json({
-        error: "Professional verification can only be requested when status is empty"
+        error: "Add structured professional background before verification."
       });
       return;
     }
 
-    const updated = await updateProfessionalVerificationStatus(
+    const updated = await markProfessionalVerified(
       req.user.id,
-      {
-        professional_status: PROFESSIONAL_STATUS.PENDING,
-        professional_score: null,
-        professional_verified_at: null
-      }
+      profile.professional_verified_at
     );
 
-    res.json({ professional_status: updated.professional_status });
+    res.json({
+      professional_status: updated.professional_status,
+      professional_verified_at: updated.professional_verified_at
+    });
   } catch (error) {
     next(error);
   }
@@ -394,6 +397,25 @@ async function removeLocalProfileImage(url: string): Promise<void> {
   }
 }
 
+async function removeLocalProfileCvFiles(userId: string): Promise<void> {
+  const cvDir = path.join(process.cwd(), "uploads", "cv", userId);
+  try {
+    const entries = await fs.readdir(cvDir);
+    await Promise.all(
+      entries.map((entry) => fs.unlink(path.join(cvDir, entry)))
+    );
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "ENOENT"
+    ) {
+      return;
+    }
+  }
+}
+
 async function cleanupIdentityArtifacts(
   userId: string,
   facePath: string
@@ -454,12 +476,33 @@ function normalizeOptionalString(value: unknown, label: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function coerceOptionalString(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 function normalizeOptionalNumber(value: unknown, label: string): number | null {
   if (value === null || value === undefined || value === "") {
     return null;
   }
   if (typeof value !== "number" || Number.isNaN(value)) {
     throw new Error(`${label} must be a number`);
+  }
+  return value;
+}
+
+function coerceOptionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
   }
   return value;
 }
@@ -478,6 +521,17 @@ function normalizeOptionalDate(value: unknown, label: string): string | null {
   return trimmed;
 }
 
+function coerceOptionalDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 function normalizeCvPayload(body: unknown): ProfileCvPayload {
   if (!body || typeof body !== "object") {
     throw new Error("Invalid payload");
@@ -487,73 +541,318 @@ function normalizeCvPayload(body: unknown): ProfileCvPayload {
     education?: unknown;
     experience?: unknown;
     projects?: unknown;
+    skills?: unknown;
     links?: unknown;
   };
 
   const educationInput = Array.isArray(data.education) ? data.education : [];
   const experienceInput = Array.isArray(data.experience) ? data.experience : [];
   const projectsInput = Array.isArray(data.projects) ? data.projects : [];
+  const skillsInput = Array.isArray(data.skills) ? data.skills : [];
   const linksInput = Array.isArray(data.links) ? data.links : [];
 
-  const education = educationInput.map((item, index) => {
-    if (!item || typeof item !== "object") {
-      throw new Error(`Education item ${index + 1} is invalid`);
-    }
-    const entry = item as Record<string, unknown>;
-    return {
-      institution: normalizeString(entry.institution, "Education institution"),
-      degree: normalizeString(entry.degree, "Education degree"),
-      start_year: normalizeOptionalNumber(entry.start_year, "Education start_year"),
-      end_year: normalizeOptionalNumber(entry.end_year, "Education end_year"),
-      country: normalizeOptionalString(entry.country, "Education country")
-    };
-  });
+  const education = educationInput.reduce<ProfileCvPayload["education"]>(
+    (acc, item) => {
+      if (!item || typeof item !== "object") {
+        return acc;
+      }
+      const entry = item as Record<string, unknown>;
+      const institution = coerceOptionalString(entry.institution);
+      if (!institution) {
+        return acc;
+      }
+      acc.push({
+        institution,
+        degree: coerceOptionalString(entry.degree),
+        field_of_study: coerceOptionalString(entry.field_of_study),
+        start_year: coerceOptionalNumber(entry.start_year),
+        end_year: coerceOptionalNumber(entry.end_year)
+      });
+      return acc;
+    },
+    []
+  );
 
-  const experience = experienceInput.map((item, index) => {
-    if (!item || typeof item !== "object") {
-      throw new Error(`Experience item ${index + 1} is invalid`);
-    }
-    const entry = item as Record<string, unknown>;
-    const isCurrent = Boolean(entry.is_current);
-    return {
-      company: normalizeString(entry.company, "Experience company"),
-      role: normalizeString(entry.role, "Experience role"),
-      start_date: normalizeString(entry.start_date, "Experience start_date"),
-      end_date: normalizeOptionalDate(entry.end_date, "Experience end_date"),
-      description: normalizeString(entry.description, "Experience description"),
-      is_current: isCurrent
-    };
-  });
+  const experience = experienceInput.reduce<ProfileCvPayload["experience"]>(
+    (acc, item) => {
+      if (!item || typeof item !== "object") {
+        return acc;
+      }
+      const entry = item as Record<string, unknown>;
+      const company = coerceOptionalString(entry.company);
+      const role = coerceOptionalString(entry.role);
+      if (!company || !role) {
+        return acc;
+      }
+      const isCurrent = Boolean(entry.is_current);
+      acc.push({
+        company,
+        role,
+        description: coerceOptionalString(entry.description),
+        start_date: coerceOptionalDate(entry.start_date),
+        end_date: isCurrent
+          ? null
+          : coerceOptionalDate(entry.end_date)
+      });
+      return acc;
+    },
+    []
+  );
 
-  const projects = projectsInput.map((item, index) => {
-    if (!item || typeof item !== "object") {
-      throw new Error(`Project item ${index + 1} is invalid`);
-    }
-    const entry = item as Record<string, unknown>;
-    return {
-      name: normalizeString(entry.name, "Project name"),
-      description: normalizeString(entry.description, "Project description"),
-      url: normalizeOptionalString(entry.url, "Project url")
-    };
-  });
+  const projects = projectsInput.reduce<ProfileCvPayload["projects"]>(
+    (acc, item) => {
+      if (!item || typeof item !== "object") {
+        return acc;
+      }
+      const entry = item as Record<string, unknown>;
+      const name = coerceOptionalString(entry.name);
+      if (!name) {
+        return acc;
+      }
+      acc.push({
+        name,
+        description: coerceOptionalString(entry.description),
+        link: coerceOptionalString(entry.url ?? entry.link)
+      });
+      return acc;
+    },
+    []
+  );
 
-  const links = linksInput.map((item, index) => {
+  const links = linksInput.reduce<ProfileCvPayload["links"]>((acc, item) => {
     if (!item || typeof item !== "object") {
-      throw new Error(`Link item ${index + 1} is invalid`);
+      return acc;
     }
     const entry = item as Record<string, unknown>;
-    return {
-      label: normalizeOptionalString(entry.label, "Link label"),
-      url: normalizeString(entry.url, "Link url")
-    };
-  });
+    const url = coerceOptionalString(entry.url);
+    if (!url) {
+      return acc;
+    }
+    acc.push({
+      label: coerceOptionalString(entry.label),
+      url
+    });
+    return acc;
+  }, []);
+
+  const skills = skillsInput.reduce<ProfileCvPayload["skills"]>((acc, item) => {
+    if (!item || typeof item !== "object") {
+      return acc;
+    }
+    const entry = item as Record<string, unknown>;
+    const name = coerceOptionalString(entry.name);
+    if (!name) {
+      return acc;
+    }
+    acc.push({ name });
+    return acc;
+  }, []);
 
   return {
     education,
     experience,
     projects,
-    links
+    links,
+    skills
   };
+}
+
+function hasCvData(payload: ProfileCvPayload): boolean {
+  return (
+    payload.education.length > 0 ||
+    payload.experience.length > 0 ||
+    payload.projects.length > 0 ||
+    payload.links.length > 0 ||
+    payload.skills.length > 0
+  );
+}
+
+function toApiCvResponse(payload: ProfileCvPayload): {
+  education: Array<{
+    institution: string;
+    degree: string | null;
+    start_year: number | null;
+    end_year: number | null;
+  }>;
+  experience: Array<{
+    company: string;
+    role: string;
+    start_date: string | null;
+    end_date: string | null;
+    description: string | null;
+    is_current: boolean;
+  }>;
+  projects: Array<{
+    name: string;
+    description: string | null;
+    url: string | null;
+  }>;
+  links: Array<{ label: string | null; url: string }>;
+  skills: Array<{ name: string }>;
+} {
+  return {
+    education: payload.education.map((item) => ({
+      institution: item.institution,
+      degree: item.degree,
+      start_year: item.start_year,
+      end_year: item.end_year
+    })),
+    experience: payload.experience.map((item) => ({
+      company: item.company,
+      role: item.role,
+      start_date: item.start_date,
+      end_date: item.end_date,
+      description: item.description,
+      is_current: !item.end_date
+    })),
+    projects: payload.projects.map((item) => ({
+      name: item.name,
+      description: item.description,
+      url: item.link
+    })),
+    links: payload.links.map((item) => ({
+      label: item.label,
+      url: item.url
+    })),
+    skills: payload.skills.map((item) => ({ name: item.name }))
+  };
+}
+
+function coerceExternalLinks(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((link) => typeof link === "string") as string[];
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+  return value.filter((link) => typeof link === "string") as string[];
+}
+
+async function markProfessionalVerified(
+  userId: string,
+  existingVerifiedAt: string | null
+) {
+  const verifiedAt = existingVerifiedAt ?? new Date().toISOString();
+  return updateProfessionalVerificationStatus(userId, {
+    professional_status: PROFESSIONAL_STATUS.AI_VERIFIED,
+    professional_score: null,
+    professional_verified_at: verifiedAt
+  });
+}
+
+export async function uploadProfileCvHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "CV file is required" });
+      return;
+    }
+
+    if (file.mimetype !== "application/pdf") {
+      res.status(400).json({ error: "Only PDF files are allowed" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(req.user.id);
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    const uploadsRoot = path.join(process.cwd(), "uploads");
+    const relativePath = path.relative(uploadsRoot, file.path);
+    const normalizedPath = relativePath.split(path.sep).join("/");
+    const cvUrl = `/uploads/${normalizedPath}`;
+
+    let savedCv = await getProfileCvByUserId(req.user.id);
+    let updatedHeadline = profile.headline;
+    let updatedBio = profile.bio;
+
+    try {
+      const text = await extractTextFromPdf(file.path);
+      const parsed = parseCvText(text);
+
+      const payload: ProfileCvPayload = {
+        education: parsed.education.length ? parsed.education : savedCv.education,
+        experience: parsed.experience.length ? parsed.experience : savedCv.experience,
+        projects: savedCv.projects,
+        links: savedCv.links,
+        skills: parsed.skills.length ? parsed.skills : savedCv.skills
+      };
+
+      savedCv = await upsertProfileCvByUserId(req.user.id, payload);
+
+      if (parsed.headline || parsed.bio) {
+        const updatedProfile = await upsertUserProfileByUserId(req.user.id, {
+          headline: parsed.headline ?? profile.headline,
+          bio: parsed.bio ?? profile.bio,
+          external_links: coerceExternalLinks(profile.external_links),
+          visibility: profile.visibility
+        });
+        updatedHeadline = updatedProfile.headline;
+        updatedBio = updatedProfile.bio;
+      }
+    } catch {
+      // Best-effort parsing only; ignore failures.
+    }
+
+    const verification = await markProfessionalVerified(
+      req.user.id,
+      profile.professional_verified_at
+    );
+
+    res.json({
+      profile: {
+        headline: updatedHeadline,
+        bio: updatedBio
+      },
+      cv: toApiCvResponse(savedCv),
+      professional_status: verification.professional_status,
+      professional_verified_at: verification.professional_verified_at
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function removeProfileCvHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(req.user.id);
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    await removeLocalProfileCvFiles(req.user.id);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function getProfileCvHandler(
@@ -568,7 +867,42 @@ export async function getProfileCvHandler(
     }
 
     const payload = await getProfileCvByUserId(req.user.id);
-    res.json(payload);
+    res.json(toApiCvResponse(payload));
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPublicProfileCvHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId =
+      typeof req.params.userId === "string"
+        ? req.params.userId.trim()
+        : "";
+
+    if (!userId) {
+      res.status(400).json({ error: "User id is required" });
+      return;
+    }
+
+    const user = await findUserById(userId);
+    if (!user || user.account_status !== "active") {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    const profile = await getProfileByUserId(userId);
+    if (!profile || profile.visibility !== "public") {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+
+    const payload = await getProfileCvByUserId(userId);
+    res.json(toApiCvResponse(payload));
   } catch (error) {
     next(error);
   }
@@ -596,7 +930,25 @@ export async function upsertProfileCvHandler(
     }
 
     const saved = await upsertProfileCvByUserId(req.user.id, payload);
-    res.json(saved);
+    let verification = null;
+
+    if (hasCvData(payload)) {
+      const profile = await getProfileByUserId(req.user.id);
+      if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      verification = await markProfessionalVerified(
+        req.user.id,
+        profile.professional_verified_at
+      );
+    }
+
+    res.json({
+      ...toApiCvResponse(saved),
+      professional_status: verification?.professional_status ?? null,
+      professional_verified_at: verification?.professional_verified_at ?? null
+    });
   } catch (error) {
     next(error);
   }

@@ -221,27 +221,15 @@ function getProfessionalBadge(status: ProfessionalStatus): {
   switch (status) {
     case PROFESSIONAL_STATUS.AI_VERIFIED:
       return {
-        label: "Profession verified",
-        tooltip: "Professional verification is complete.",
+        label: "Professional profile verified",
+        tooltip: "Professional profile verified based on structured career information.",
         tone: "verified"
-      };
-    case PROFESSIONAL_STATUS.PENDING:
-      return {
-        label: "Verification in progress",
-        tooltip: "Professional verification is in progress.",
-        tone: "pending"
-      };
-    case PROFESSIONAL_STATUS.REJECTED:
-      return {
-        label: "Verification rejected",
-        tooltip: "Professional verification was rejected.",
-        tone: "rejected"
       };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
       return {
-        label: "Profession not verified",
-        tooltip: "Professional verification has not been requested.",
+        label: "Structured profile required",
+        tooltip: "Professional profile has not been completed yet.",
         tone: "muted"
       };
   }
@@ -286,25 +274,17 @@ function getProfessionalDetails(
     case PROFESSIONAL_STATUS.AI_VERIFIED: {
       const verifiedOn = formatIsoDate(verifiedAt);
       return {
-        label: "Profession verified",
-        subtext: verifiedOn ? `Verified on: ${verifiedOn}` : "Profession verified"
+        label: "Professional profile verified",
+        subtext: verifiedOn
+          ? `Professional profile verified on ${verifiedOn}.`
+          : "Professional profile verified based on structured career information."
       };
     }
-    case PROFESSIONAL_STATUS.PENDING:
-      return {
-        label: "Verification in progress",
-        subtext: "AI review in progress"
-      };
-    case PROFESSIONAL_STATUS.REJECTED:
-      return {
-        label: "Verification rejected",
-        subtext: "Improve your profile and retry"
-      };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
       return {
-        label: "Profession not verified",
-        subtext: "Complete your CV and request verification"
+        label: "Structured profile required",
+        subtext: "Complete a structured profile to verify professional background."
       };
   }
 }

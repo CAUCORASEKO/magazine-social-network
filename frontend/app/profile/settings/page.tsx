@@ -49,14 +49,10 @@ function getProfessionalStatus(
 ): { label: string; tone: StatusTone } {
   switch (status) {
     case PROFESSIONAL_STATUS.AI_VERIFIED:
-      return { label: "Profession verified", tone: "verified" };
-    case PROFESSIONAL_STATUS.PENDING:
-      return { label: "Verification in progress", tone: "pending" };
-    case PROFESSIONAL_STATUS.REJECTED:
-      return { label: "Verification rejected", tone: "rejected" };
+      return { label: "Professional profile verified", tone: "verified" };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
-      return { label: "Profession not verified", tone: "muted" };
+      return { label: "Structured profile required", tone: "muted" };
   }
 }
 
@@ -262,7 +258,7 @@ export default function SettingsPage(): JSX.Element {
                   <div>
                     <p className={styles.itemLabel}>Professional verification</p>
                     <p className={styles.itemCopy}>
-                      Add your CV to request professional verification.
+                      Upload a CV or complete your structured profile to verify.
                     </p>
                     <Link className={styles.inlineLink} href="/profile/edit">
                       Edit professional profile

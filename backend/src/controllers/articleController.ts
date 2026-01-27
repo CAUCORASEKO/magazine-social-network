@@ -2,18 +2,144 @@ import type { Request, Response, NextFunction } from "express";
 
 import {
   createDraftArticle,
+  findDraftByAuthorAndMagazine,
   findArticleById,
   getPublishedArticleById,
   listPublishedArticles,
   listPublishedArticlesByMagazine,
   listPublishedArticlesFeed,
-  updateArticleStatus
+  publishArticle,
+  submitArticle,
+  updateArticleStatus,
+  updateDraftArticle
 } from "../repositories/articleRepository";
-import { findMagazineById } from "../repositories/magazineRepository";
+import {
+  ensureDefaultMagazineForUser,
+  findMagazineById
+} from "../repositories/magazineRepository";
+import { getProfileByUserId } from "../repositories/userProfileRepository";
+import { PROFESSIONAL_STATUS } from "../constants/verification";
+import { findDefaultTopicId } from "../repositories/topicRepository";
 
 interface CreateArticleBody {
+  article_id?: string;
   title?: string;
   body?: string;
+  status?: string;
+}
+
+async function resolveDefaultMagazine(userId: string, languageId: string) {
+  const defaultTopicId = await findDefaultTopicId();
+  if (!defaultTopicId) {
+    throw new Error("Default topic not available");
+  }
+
+  return ensureDefaultMagazineForUser({
+    owner_user_id: userId,
+    primary_topic_id: defaultTopicId,
+    primary_language_id: languageId,
+    title: "Personal Magazine",
+    description: null
+  });
+}
+
+export async function upsertDraftArticleHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const body = req.body as CreateArticleBody;
+    const articleId =
+      typeof body.article_id === "string" ? body.article_id.trim() : "";
+    const status = typeof body.status === "string" ? body.status.trim() : "";
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const content = typeof body.body === "string" ? body.body.trim() : "";
+
+    if (!status || status !== "draft") {
+      res.status(400).json({ error: "Draft status is required" });
+      return;
+    }
+
+    if (!title) {
+      res.status(400).json({ error: "Title is required" });
+      return;
+    }
+
+    if (!content) {
+      res.status(400).json({ error: "Body is required" });
+      return;
+    }
+
+    const magazine = await resolveDefaultMagazine(
+      req.user.id,
+      req.user.ui_language_id
+    );
+
+    if (articleId) {
+      const article = await findArticleById(articleId);
+      if (!article) {
+        res.status(404).json({ error: "Article not found" });
+        return;
+      }
+
+      if (article.author_user_id !== req.user.id) {
+        res.status(404).json({ error: "Article not found" });
+        return;
+      }
+
+      if (article.status !== "draft") {
+        res.status(409).json({ error: "Only draft articles can be updated" });
+        return;
+      }
+
+      if (article.magazine_id !== magazine.id) {
+        res.status(409).json({ error: "Draft is not in your default magazine" });
+        return;
+      }
+
+      const updated = await updateDraftArticle({
+        article_id: articleId,
+        title,
+        body: content
+      });
+      res.status(200).json(updated);
+      return;
+    }
+
+    const existingDraft = await findDraftByAuthorAndMagazine(
+      req.user.id,
+      magazine.id
+    );
+
+    if (existingDraft) {
+      const updated = await updateDraftArticle({
+        article_id: existingDraft.id,
+        title,
+        body: content
+      });
+      res.status(200).json(updated);
+      return;
+    }
+
+    const article = await createDraftArticle({
+      magazine_id: magazine.id,
+      author_user_id: req.user.id,
+      language_id: magazine.primary_language_id,
+      topic_id: magazine.primary_topic_id,
+      title,
+      body: content
+    });
+
+    res.status(201).json(article);
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function createArticleHandler(
@@ -27,25 +153,10 @@ export async function createArticleHandler(
       return;
     }
 
-    const magazineId = typeof req.params.magazineId === "string"
-      ? req.params.magazineId.trim()
-      : "";
-
-    if (!magazineId) {
-      res.status(400).json({ error: "Magazine id is required" });
-      return;
-    }
-
-    const magazine = await findMagazineById(magazineId);
-    if (!magazine) {
-      res.status(404).json({ error: "Magazine not found" });
-      return;
-    }
-
-    if (magazine.owner_user_id !== req.user.id) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    const magazine = await resolveDefaultMagazine(
+      req.user.id,
+      req.user.ui_language_id
+    );
 
     const body = req.body as CreateArticleBody;
     const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -113,7 +224,7 @@ export async function submitArticleHandler(
       return;
     }
 
-    const updated = await updateArticleStatus(article.id, "submitted", null);
+    const updated = await submitArticle(article.id);
     res.json(updated);
   } catch (error) {
     next(error);
@@ -157,6 +268,17 @@ export async function publishArticleHandler(
       return;
     }
 
+    const profile = await getProfileByUserId(req.user.id);
+    if (!profile) {
+      res.status(403).json({ error: "Professional verification required" });
+      return;
+    }
+
+    if (profile.professional_status !== PROFESSIONAL_STATUS.AI_VERIFIED) {
+      res.status(403).json({ error: "Professional verification required" });
+      return;
+    }
+
     const magazine = await findMagazineById(article.magazine_id);
     if (!magazine) {
       res.status(404).json({ error: "Magazine not found" });
@@ -177,11 +299,7 @@ export async function publishArticleHandler(
     }
 
     const publishedAt = new Date().toISOString();
-    const updated = await updateArticleStatus(
-      article.id,
-      "published",
-      publishedAt
-    );
+    const updated = await publishArticle(article.id, publishedAt);
     res.json(updated);
   } catch (error) {
     next(error);

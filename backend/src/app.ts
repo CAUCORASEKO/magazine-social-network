@@ -49,5 +49,5 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (res.headersSent) {
     return;
   }
-  res.status(500).json({ error: "Internal server error" });
+  res.status(500).json({ error: "Something went wrong" });
 });

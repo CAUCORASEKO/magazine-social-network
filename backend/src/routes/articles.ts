@@ -4,7 +4,8 @@ import {
   getPublishedArticleHandler,
   listPublishedArticlesHandler,
   publishArticleHandler,
-  submitArticleHandler
+  submitArticleHandler,
+  upsertDraftArticleHandler
 } from "../controllers/articleController";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireActiveAccount } from "../middleware/requireActiveAccount";
@@ -12,6 +13,12 @@ import { requireVerifiedIdentity } from "../middleware/requireVerifiedIdentity";
 
 export const articlesRouter = Router();
 
+articlesRouter.post(
+  "/articles",
+  requireAuth,
+  requireActiveAccount,
+  upsertDraftArticleHandler
+);
 articlesRouter.post(
   "/articles/:articleId/submit",
   requireAuth,

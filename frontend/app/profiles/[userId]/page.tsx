@@ -8,6 +8,7 @@ import {
   IDENTITY_STATUS,
   PROFESSIONAL_STATUS
 } from "../../lib/verification";
+import CvModal from "./cv-modal";
 
 interface PublicProfile {
   user_id: string;
@@ -22,6 +23,36 @@ interface PublicProfile {
   professional_status: ProfessionalStatus;
   professional_score: number | null;
   professional_verified_at: string | null;
+  professional_cv_url: string | null;
+}
+
+interface PublicProfileCv {
+  education: Array<{
+    institution: string;
+    degree: string | null;
+    start_year: number | null;
+    end_year: number | null;
+  }>;
+  experience: Array<{
+    company: string;
+    role: string;
+    start_date: string | null;
+    end_date: string | null;
+    description: string | null;
+    is_current: boolean;
+  }>;
+  projects: Array<{
+    name: string;
+    description: string | null;
+    url: string | null;
+  }>;
+  links: Array<{
+    label: string | null;
+    url: string;
+  }>;
+  skills: Array<{
+    name: string;
+  }>;
 }
 
 interface PublishedArticleSummary {
@@ -31,9 +62,9 @@ interface PublishedArticleSummary {
   author_user_id: string;
 }
 
-const SHOW_DEBUG_VERIFICATION = false;
-const showVerificationDebug =
-  process.env.NODE_ENV === "development" || SHOW_DEBUG_VERIFICATION;
+interface MeResponse {
+  id: string;
+}
 
 async function fetchProfile(userId: string): Promise<PublicProfile | null> {
   const response = await fetch(`${API_BASE_URL}/profiles/${userId}`, {
@@ -57,6 +88,23 @@ async function fetchProfile(userId: string): Promise<PublicProfile | null> {
   return (await response.json()) as PublicProfile;
 }
 
+async function fetchPublicCv(userId: string): Promise<PublicProfileCv | null> {
+  const response = await fetch(`${API_BASE_URL}/profiles/${userId}/cv`, {
+    next: { revalidate: 10 },
+    credentials: "include"
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("Unable to load professional background");
+  }
+
+  return (await response.json()) as PublicProfileCv;
+}
+
 async function fetchPublishedArticles(): Promise<PublishedArticleSummary[]> {
   const response = await fetch(`${API_BASE_URL}/articles`, {
     next: { revalidate: 10 },
@@ -70,6 +118,23 @@ async function fetchPublishedArticles(): Promise<PublishedArticleSummary[]> {
   return (await response.json()) as PublishedArticleSummary[];
 }
 
+async function fetchMe(): Promise<MeResponse | null> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    next: { revalidate: 10 },
+    credentials: "include"
+  });
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("Unable to load session");
+  }
+
+  return (await response.json()) as MeResponse;
+}
+
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -78,6 +143,29 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium"
   }).format(date);
+}
+
+function formatRange(start: string | null, end: string | null): string {
+  if (start && end) {
+    return `${start} - ${end}`;
+  }
+  if (start) {
+    return `${start} - Present`;
+  }
+  return "";
+}
+
+function hasPublicCvData(cv: PublicProfileCv | null): boolean {
+  if (!cv) {
+    return false;
+  }
+  return (
+    cv.education.length > 0 ||
+    cv.experience.length > 0 ||
+    cv.projects.length > 0 ||
+    cv.links.length > 0 ||
+    cv.skills.length > 0
+  );
 }
 
 function getIdentityBadge(status: IdentityStatus): {
@@ -142,30 +230,16 @@ function getProfessionalBadge(status: ProfessionalStatus): {
   switch (status) {
     case PROFESSIONAL_STATUS.AI_VERIFIED:
       return {
-        label: "Profession verified",
-        tooltip: "Professional verification is complete.",
+        label: "Professional profile verified",
+        tooltip: "Professional profile verified based on structured career information.",
         tone: "verified",
         icon: "check"
-      };
-    case PROFESSIONAL_STATUS.PENDING:
-      return {
-        label: "Verification in progress",
-        tooltip: "Professional verification is in progress.",
-        tone: "pending",
-        icon: "clock"
-      };
-    case PROFESSIONAL_STATUS.REJECTED:
-      return {
-        label: "Verification rejected",
-        tooltip: "Professional verification was rejected.",
-        tone: "rejected",
-        icon: "x"
       };
     case PROFESSIONAL_STATUS.EMPTY:
     default:
       return {
-        label: "Profession not verified",
-        tooltip: "Professional verification has not been requested.",
+        label: "Structured profile required",
+        tooltip: "Professional profile has not been completed yet.",
         tone: "muted",
         icon: "dot"
       };
@@ -250,18 +324,25 @@ export default async function ProfilePage({
   params: { userId: string };
 }): Promise<JSX.Element> {
   let profile: PublicProfile | null = null;
+  let profileCv: PublicProfileCv | null = null;
+  let me: MeResponse | null = null;
   let publishedArticles: PublishedArticleSummary[] = [];
   let errorMessage: string | null = null;
 
   try {
-    const [profileResult, articleResult] = await Promise.all([
+    const [profileResult, articleResult, meResult] = await Promise.all([
       fetchProfile(params.userId),
-      fetchPublishedArticles()
+      fetchPublishedArticles(),
+      fetchMe()
     ]);
     profile = profileResult;
+    me = meResult;
     publishedArticles = articleResult.filter(
       (article) => article.author_user_id === params.userId
     );
+    if (profile && !profile.professional_cv_url) {
+      profileCv = await fetchPublicCv(params.userId);
+    }
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "Unknown error";
   }
@@ -308,6 +389,16 @@ export default async function ProfilePage({
                 <h1 className={styles.name}>{profile.full_name}</h1>
                 {profile.headline ? (
                   <p className={styles.headline}>{profile.headline}</p>
+                ) : null}
+                {me?.id === profile.user_id ? (
+                  <div className={styles.ownerActions}>
+                    <Link className={styles.ownerLink} href="/profile/edit">
+                      Edit profile
+                    </Link>
+                    <Link className={styles.ownerLink} href="/profile/edit#professional">
+                      Edit professional background
+                    </Link>
+                  </div>
                 ) : null}
                 <div className={styles.badges}>
                   {(() => {
@@ -391,11 +482,6 @@ export default async function ProfilePage({
               </div>
             </div>
           </header>
-          {showVerificationDebug && profile.professional_score !== null ? (
-            <div className={styles.debugBlock}>
-              Verification score (debug): {profile.professional_score}
-            </div>
-          ) : null}
           {profile.bio ? <p className={styles.bio}>{profile.bio}</p> : null}
           {profile.external_links && profile.external_links.length > 0 ? (
             <div className={styles.links}>
@@ -412,6 +498,119 @@ export default async function ProfilePage({
               </ul>
             </div>
           ) : null}
+          {profile.professional_cv_url ? (
+            <section className={styles.cvSection}>
+              <p className={styles.cvTitle}>CV</p>
+              {resolveProfileImageUrl(profile.professional_cv_url) ? (
+                <CvModal
+                  cvUrl={resolveProfileImageUrl(profile.professional_cv_url) ?? ""}
+                />
+              ) : null}
+            </section>
+          ) : (
+            <section className={styles.cvSection}>
+              <p className={styles.cvTitle}>Professional background</p>
+              {profileCv?.experience.length ? (
+                <div className={styles.cvCard}>
+                  <div className={styles.cvItemTitle}>Experience</div>
+                  <ul className={styles.cvList}>
+                    {profileCv.experience.map((item, index) => (
+                      <li key={`exp-${index}`}>
+                        <div className={styles.cvItemTitle}>
+                          {item.role} · {item.company}
+                        </div>
+                        {formatRange(item.start_date, item.end_date) ? (
+                          <div className={styles.cvMeta}>
+                            {formatRange(item.start_date, item.end_date)}
+                          </div>
+                        ) : null}
+                        {item.description ? (
+                          <div className={styles.cvMeta}>{item.description}</div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {profileCv?.education.length ? (
+                <div className={styles.cvCard}>
+                  <div className={styles.cvItemTitle}>Education</div>
+                  <ul className={styles.cvList}>
+                    {profileCv.education.map((item, index) => (
+                      <li key={`edu-${index}`}>
+                        <div className={styles.cvItemTitle}>{item.institution}</div>
+                        {item.degree ? (
+                          <div className={styles.cvMeta}>{item.degree}</div>
+                        ) : null}
+                        {item.start_year || item.end_year ? (
+                          <div className={styles.cvMeta}>
+                            {(item.start_year ?? "") +
+                              (item.end_year ? ` - ${item.end_year}` : "")}
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {profileCv?.projects.length ? (
+                <div className={styles.cvCard}>
+                  <div className={styles.cvItemTitle}>Projects</div>
+                  <ul className={styles.cvList}>
+                    {profileCv.projects.map((item, index) => (
+                      <li key={`proj-${index}`}>
+                        <div className={styles.cvItemTitle}>{item.name}</div>
+                        {item.description ? (
+                          <div className={styles.cvMeta}>{item.description}</div>
+                        ) : null}
+                        {item.url ? (
+                          <a
+                            className={styles.cvMeta}
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {item.url}
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {profileCv?.links.length ? (
+                <div className={styles.cvCard}>
+                  <div className={styles.cvItemTitle}>Links</div>
+                  <ul className={styles.cvList}>
+                    {profileCv.links.map((item, index) => (
+                      <li key={`link-${index}`}>
+                        <a
+                          className={styles.cvMeta}
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {item.label ?? item.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {profileCv?.skills.length ? (
+                <div className={styles.cvCard}>
+                  <div className={styles.cvItemTitle}>Skills</div>
+                  <ul className={styles.cvPillList}>
+                    {profileCv.skills.map((item, index) => (
+                      <li key={`skill-${index}`} className={styles.cvPill}>
+                        {item.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+          )}
           <div className={styles.articles}>
             <p className={styles.articlesTitle}>Published articles</p>
             {publishedArticles.length === 0 ? (

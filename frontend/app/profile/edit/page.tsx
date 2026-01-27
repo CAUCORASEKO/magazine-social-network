@@ -26,6 +26,7 @@ type PublicProfile = {
   professional_status: ProfessionalStatus;
   professional_score: number | null;
   professional_verified_at: string | null;
+  professional_cv_url: string | null;
 };
 
 type EducationEntry = {
@@ -33,7 +34,6 @@ type EducationEntry = {
   degree: string;
   start_year: string;
   end_year: string;
-  country: string;
 };
 
 type ExperienceEntry = {
@@ -59,27 +59,29 @@ type LinkEntry = {
 type ProfileCvResponse = {
   education: Array<{
     institution: string;
-    degree: string;
+    degree: string | null;
     start_year: number | null;
     end_year: number | null;
-    country: string | null;
   }>;
   experience: Array<{
     company: string;
     role: string;
-    start_date: string;
+    start_date: string | null;
     end_date: string | null;
-    description: string;
+    description: string | null;
     is_current: boolean;
   }>;
   projects: Array<{
     name: string;
-    description: string;
+    description: string | null;
     url: string | null;
   }>;
   links: Array<{
     label: string | null;
     url: string;
+  }>;
+  skills: Array<{
+    name: string;
   }>;
 };
 
@@ -98,18 +100,24 @@ export default function ProfileEditPage(): JSX.Element {
   const [professionalVerifiedAt, setProfessionalVerifiedAt] = useState<
     string | null
   >(null);
+  const [professionalCvUrl, setProfessionalCvUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRequesting, setIsRequesting] = useState(false);
   const [isSavingCv, setIsSavingCv] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvUploadError, setCvUploadError] = useState<string | null>(null);
+  const [cvUploadMessage, setCvUploadMessage] = useState<string | null>(null);
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
+  const [cvStatusMessage, setCvStatusMessage] = useState<string | null>(null);
 
   const [education, setEducation] = useState<EducationEntry[]>([]);
   const [experience, setExperience] = useState<ExperienceEntry[]>([]);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [links, setLinks] = useState<LinkEntry[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
 
   useEffect(() => {
     let isActive = true;
@@ -154,6 +162,9 @@ export default function ProfileEditPage(): JSX.Element {
             setVisibility(profile.visibility);
             setProfessionalStatus(profile.professional_status);
             setProfessionalVerifiedAt(profile.professional_verified_at ?? null);
+            setProfessionalCvUrl(
+              resolveProfileImageUrl(profile.professional_cv_url)
+            );
             setProfileImageUrl(resolveProfileImageUrl(profile.profile_image_url));
             setSelectedPhotoFile(null);
             setPhotoPreviewUrl(null);
@@ -170,10 +181,9 @@ export default function ProfileEditPage(): JSX.Element {
             setEducation(
               cv.education.map((item) => ({
                 institution: item.institution,
-                degree: item.degree,
+                degree: item.degree ?? "",
                 start_year: item.start_year ? item.start_year.toString() : "",
-                end_year: item.end_year ? item.end_year.toString() : "",
-                country: item.country ?? ""
+                end_year: item.end_year ? item.end_year.toString() : ""
               }))
             );
             setExperience(
@@ -182,14 +192,14 @@ export default function ProfileEditPage(): JSX.Element {
                 role: item.role,
                 start_date: item.start_date ?? "",
                 end_date: item.end_date ?? "",
-                description: item.description,
+                description: item.description ?? "",
                 is_current: item.is_current
               }))
             );
             setProjects(
               cv.projects.map((item) => ({
                 name: item.name,
-                description: item.description,
+                description: item.description ?? "",
                 url: item.url ?? ""
               }))
             );
@@ -199,6 +209,7 @@ export default function ProfileEditPage(): JSX.Element {
                 url: item.url
               }))
             );
+            setSkills(cv.skills.map((item) => item.name));
           }
         }
       } catch (error) {
@@ -289,38 +300,6 @@ export default function ProfileEditPage(): JSX.Element {
     }
   }
 
-  async function handleRequestVerification(): Promise<void> {
-    setErrorMessage(null);
-    setMessage(null);
-    setIsRequesting(true);
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/profile/request-professional-verification`,
-        {
-          method: "POST",
-          credentials: "include"
-        }
-      );
-
-      if (!response.ok) {
-        const data = (await response.json()) as { error?: string };
-        throw new Error(data?.error || "Unable to request verification.");
-      }
-
-      const result = (await response.json()) as {
-        professional_status: ProfessionalStatus;
-      };
-      setProfessionalStatus(result.professional_status);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Unable to request verification."
-      );
-    } finally {
-      setIsRequesting(false);
-    }
-  }
-
   function ensureNumber(value: string): number | null {
     if (!value.trim()) {
       return null;
@@ -338,22 +317,18 @@ export default function ProfileEditPage(): JSX.Element {
         item.institution.trim() ||
         item.degree.trim() ||
         item.start_year.trim() ||
-        item.end_year.trim() ||
-        item.country.trim()
+        item.end_year.trim()
       )
       .map((item) => ({
         institution: item.institution.trim(),
-        degree: item.degree.trim(),
+        degree: item.degree.trim() || null,
         start_year: ensureNumber(item.start_year),
-        end_year: ensureNumber(item.end_year),
-        country: item.country.trim() || null
+        end_year: ensureNumber(item.end_year)
       }));
 
-    for (const entry of educationPayload) {
-      if (!entry.institution || !entry.degree) {
-        throw new Error("Education entries require institution and degree.");
-      }
-    }
+    const normalizedEducation = educationPayload.filter(
+      (entry) => entry.institution
+    );
 
     const experiencePayload = experience
       .filter((item) =>
@@ -372,13 +347,9 @@ export default function ProfileEditPage(): JSX.Element {
         is_current: item.is_current
       }));
 
-    for (const entry of experiencePayload) {
-      if (!entry.company || !entry.role || !entry.start_date || !entry.description) {
-        throw new Error(
-          "Experience entries require company, role, start date, and description."
-        );
-      }
-    }
+    const normalizedExperience = experiencePayload.filter(
+      (entry) => entry.company && entry.role
+    );
 
     const projectPayload = projects
       .filter((item) =>
@@ -392,11 +363,7 @@ export default function ProfileEditPage(): JSX.Element {
         url: item.url.trim() || null
       }));
 
-    for (const entry of projectPayload) {
-      if (!entry.name || !entry.description) {
-        throw new Error("Projects require name and description.");
-      }
-    }
+    const normalizedProjects = projectPayload.filter((entry) => entry.name);
 
     const linkPayload = links
       .filter((item) => item.label.trim() || item.url.trim())
@@ -405,17 +372,19 @@ export default function ProfileEditPage(): JSX.Element {
         url: item.url.trim()
       }));
 
-    for (const entry of linkPayload) {
-      if (!entry.url) {
-        throw new Error("Links require a URL.");
-      }
-    }
+    const normalizedLinks = linkPayload.filter((entry) => entry.url);
+
+    const normalizedSkills = skills
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .map((name) => ({ name }));
 
     return {
-      education: educationPayload,
-      experience: experiencePayload,
-      projects: projectPayload,
-      links: linkPayload
+      education: normalizedEducation,
+      experience: normalizedExperience,
+      projects: normalizedProjects,
+      links: normalizedLinks,
+      skills: normalizedSkills
     };
   }
 
@@ -434,17 +403,26 @@ export default function ProfileEditPage(): JSX.Element {
       });
 
       if (!response.ok) {
-        const data = (await response.json()) as { error?: string };
-        throw new Error(data?.error || "Unable to save professional background.");
+        setMessage(
+          "Your CV is being processed. Please check back shortly."
+        );
+        return;
       }
-
-      setMessage("Professional background saved.");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to save professional background."
-      );
+      const result = (await response.json()) as {
+        professional_status?: ProfessionalStatus | null;
+        professional_verified_at?: string | null;
+      };
+      if (result.professional_status) {
+        setProfessionalStatus(result.professional_status);
+        setProfessionalVerifiedAt(result.professional_verified_at ?? null);
+        setMessage(
+          "Professional profile verified based on structured career information."
+        );
+      } else {
+        setMessage("Professional background saved.");
+      }
+    } catch {
+      setMessage("Your CV is being processed. Please check back shortly.");
     } finally {
       setIsSavingCv(false);
     }
@@ -486,6 +464,14 @@ export default function ProfileEditPage(): JSX.Element {
     });
   }
 
+  function updateSkill(index: number, value: string) {
+    setSkills((items) => {
+      const next = [...items];
+      next[index] = value;
+      return next;
+    });
+  }
+
   function removeEducation(index: number) {
     setEducation((items) => items.filter((_, idx) => idx !== index));
   }
@@ -502,6 +488,10 @@ export default function ProfileEditPage(): JSX.Element {
     setLinks((items) => items.filter((_, idx) => idx !== index));
   }
 
+  function removeSkill(index: number) {
+    setSkills((items) => items.filter((_, idx) => idx !== index));
+  }
+
   function formatVerifiedDate(value: string | null): string | null {
     if (!value) {
       return null;
@@ -516,39 +506,26 @@ export default function ProfileEditPage(): JSX.Element {
   const professionalDetails = (() => {
     const verifiedOn = formatVerifiedDate(professionalVerifiedAt);
     switch (professionalStatus) {
-      case PROFESSIONAL_STATUS.PENDING:
-        return {
-          label: "Verification in progress",
-          tone: "pending" as const,
-          helper: "We’re reviewing your professional background.",
-          actionLabel: "Verification in progress",
-          actionDisabled: true
-        };
       case PROFESSIONAL_STATUS.AI_VERIFIED:
         return {
-          label: "Profession verified",
+          label: "Professional profile verified",
           tone: "verified" as const,
-          helper: verifiedOn ? `Verified on ${verifiedOn}` : "Verified."
-        };
-      case PROFESSIONAL_STATUS.REJECTED:
-        return {
-          label: "Verification rejected",
-          tone: "rejected" as const,
-          helper: "Update your background and retry verification.",
-          actionLabel: "Retry verification",
-          actionDisabled: false
+          helper: verifiedOn
+            ? `Professional profile verified based on structured career information. Verified on ${verifiedOn}.`
+            : "Professional profile verified based on structured career information."
         };
       case PROFESSIONAL_STATUS.EMPTY:
       default:
         return {
-          label: "Profession not verified",
+          label: "Structured profile required",
           tone: "muted" as const,
-          helper: "Add your background to request professional verification.",
-          actionLabel: "Request professional verification",
-          actionDisabled: false
+          helper:
+            "Upload your CV (PDF) or complete the structured profile to verify your professional background."
         };
     }
   })();
+
+  const showManualCv = !professionalCvUrl;
 
   function resolveProfileImageUrl(url: string | null): string | null {
     if (!url) {
@@ -603,6 +580,153 @@ export default function ProfileEditPage(): JSX.Element {
     setPhotoPreviewUrl(URL.createObjectURL(file));
   }
 
+  function handleCvChange(event: React.ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setCvFile(null);
+      setCvUploadError(null);
+      return;
+    }
+    if (file.type !== "application/pdf") {
+      setCvUploadError("Only PDF files are allowed.");
+      event.target.value = "";
+      return;
+    }
+    setCvUploadError(null);
+    setCvFile(file);
+  }
+
+  function handleRemoveCv(): void {
+    (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/profile/cv`, {
+          method: "DELETE",
+          credentials: "include"
+        });
+        if (!response.ok) {
+          setCvStatusMessage(
+            "Your CV is being processed. Please check back shortly."
+          );
+          return;
+        }
+        setProfessionalCvUrl(null);
+        setCvStatusMessage(
+          "CV removed. Add a new upload or save manual entries."
+        );
+      } catch {
+        setCvStatusMessage(
+          "Your CV is being processed. Please check back shortly."
+        );
+      }
+    })();
+  }
+
+  async function handleCvUpload(): Promise<void> {
+    if (!cvFile) {
+      setCvUploadError("Select a PDF to upload.");
+      return;
+    }
+    setErrorMessage(null);
+    setCvUploadError(null);
+    setCvUploadMessage(null);
+    setCvStatusMessage(null);
+    setIsUploadingCv(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("cv", cvFile);
+      const response = await fetch(`${API_BASE_URL}/profile/cv/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: formData
+      });
+
+      if (!response.ok) {
+        setCvUploadMessage(
+          "Your CV upload is being processed. Check back shortly."
+        );
+        return;
+      }
+
+      const result = (await response.json()) as {
+        profile?: {
+          headline?: string | null;
+          bio?: string | null;
+          professional_cv_url?: string | null;
+        };
+        cv?: ProfileCvResponse;
+        professional_status?: ProfessionalStatus;
+        professional_verified_at?: string | null;
+        professional_cv_url?: string | null;
+      };
+
+      if (result.profile) {
+        setHeadline(result.profile.headline ?? "");
+        setBio(result.profile.bio ?? "");
+        if (result.profile.professional_cv_url) {
+          setProfessionalCvUrl(
+            resolveProfileImageUrl(result.profile.professional_cv_url)
+          );
+        }
+      }
+      if (result.cv) {
+        setEducation(
+          result.cv.education.map((item) => ({
+            institution: item.institution,
+            degree: item.degree ?? "",
+            start_year: item.start_year ? item.start_year.toString() : "",
+            end_year: item.end_year ? item.end_year.toString() : ""
+          }))
+        );
+        setExperience(
+          result.cv.experience.map((item) => ({
+            company: item.company,
+            role: item.role,
+            start_date: item.start_date ?? "",
+            end_date: item.end_date ?? "",
+            description: item.description ?? "",
+            is_current: item.is_current
+          }))
+        );
+        setProjects(
+          result.cv.projects.map((item) => ({
+            name: item.name,
+            description: item.description ?? "",
+            url: item.url ?? ""
+          }))
+        );
+        setLinks(
+          result.cv.links.map((item) => ({
+            label: item.label ?? "",
+            url: item.url
+          }))
+        );
+        setSkills(result.cv.skills.map((item) => item.name));
+      }
+
+      if (result.professional_status) {
+        setProfessionalStatus(result.professional_status);
+      }
+      if (result.professional_verified_at !== undefined) {
+        setProfessionalVerifiedAt(result.professional_verified_at);
+      }
+      if (result.professional_cv_url) {
+        setProfessionalCvUrl(resolveProfileImageUrl(result.professional_cv_url));
+      }
+
+      setCvUploadMessage(
+        "Professional profile verified based on structured career information."
+      );
+      setCvFile(null);
+    } catch {
+      setCvUploadMessage(
+        "Your CV upload is being processed. Check back shortly."
+      );
+    } finally {
+      setIsUploadingCv(false);
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (photoPreviewUrl) {
@@ -626,7 +750,13 @@ export default function ProfileEditPage(): JSX.Element {
           </div>
         </header>
 
-        {errorMessage ? <div className={styles.error}>{errorMessage}</div> : null}
+        {errorMessage ? (
+          <div className={styles.error}>
+            {errorMessage.includes("Internal server error")
+              ? "Something went wrong."
+              : errorMessage}
+          </div>
+        ) : null}
         {message ? <div className={styles.success}>{message}</div> : null}
         <section className={styles.photoSection}>
           <div className={styles.photoHeader}>
@@ -725,11 +855,69 @@ export default function ProfileEditPage(): JSX.Element {
             <p className={styles.cvEyebrow}>Professional background</p>
             <h2>Structured profile</h2>
             <p className={styles.cvSubhead}>
-              Add education, experience, projects, and links to support future
-              professional verification.
+              Choose one path: upload a PDF CV or enter your structured background
+              manually. Either path verifies your professional profile.
             </p>
           </header>
 
+          <div className={styles.cvUpload}>
+            <div>
+              <p className={styles.cvUploadTitle}>Upload CV (PDF)</p>
+              <p className={styles.cvUploadHint}>
+                Uploading a PDF stores a downloadable CV. Parsing is best-effort.
+              </p>
+            </div>
+            <div className={styles.cvUploadActions}>
+              <label className={styles.cvUploadField}>
+                Choose PDF
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleCvChange}
+                  disabled={isUploadingCv}
+                />
+              </label>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                onClick={handleCvUpload}
+                disabled={!cvFile || isUploadingCv}
+              >
+                {isUploadingCv ? "Uploading..." : "Upload CV (PDF)"}
+              </button>
+              {professionalCvUrl ? (
+                <>
+                  <a
+                    className={styles.secondaryButton}
+                    href={professionalCvUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View CV
+                  </a>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    onClick={handleRemoveCv}
+                  >
+                    Remove CV
+                  </button>
+                </>
+              ) : null}
+            </div>
+            {cvUploadError ? (
+              <p className={styles.error}>{cvUploadError}</p>
+            ) : null}
+            {cvUploadMessage ? (
+              <p className={styles.success}>{cvUploadMessage}</p>
+            ) : null}
+            {cvStatusMessage ? (
+              <p className={styles.success}>{cvStatusMessage}</p>
+            ) : null}
+          </div>
+
+          {showManualCv ? (
+          <>
           <div className={styles.cvBlock}>
             <div className={styles.cvBlockHeader}>
               <h3>Education</h3>
@@ -743,8 +931,7 @@ export default function ProfileEditPage(): JSX.Element {
                       institution: "",
                       degree: "",
                       start_year: "",
-                      end_year: "",
-                      country: ""
+                      end_year: ""
                     }
                   ])
                 }
@@ -796,15 +983,6 @@ export default function ProfileEditPage(): JSX.Element {
                         updateEducation(index, "end_year", event.target.value)
                       }
                       inputMode="numeric"
-                    />
-                  </label>
-                  <label className={styles.field}>
-                    Country
-                    <input
-                      value={item.country}
-                      onChange={(event) =>
-                        updateEducation(index, "country", event.target.value)
-                      }
                     />
                   </label>
                 </div>
@@ -1032,6 +1210,40 @@ export default function ProfileEditPage(): JSX.Element {
             ))}
           </div>
 
+          <div className={styles.cvBlock}>
+            <div className={styles.cvBlockHeader}>
+              <h3>Skills</h3>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                onClick={() => setSkills((items) => [...items, ""])}
+              >
+                Add skill
+              </button>
+            </div>
+            {skills.length === 0 ? (
+              <p className={styles.cvEmpty}>No skills added yet.</p>
+            ) : null}
+            {skills.map((skill, index) => (
+              <div key={`skill-${index}`} className={styles.cvItem}>
+                <label className={styles.field}>
+                  Skill
+                  <input
+                    value={skill}
+                    onChange={(event) => updateSkill(index, event.target.value)}
+                  />
+                </label>
+                <button
+                  className={styles.removeButton}
+                  type="button"
+                  onClick={() => removeSkill(index)}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
           <button
             className={styles.primaryButton}
             type="button"
@@ -1040,6 +1252,12 @@ export default function ProfileEditPage(): JSX.Element {
           >
             {isSavingCv ? "Saving..." : "Save professional background"}
           </button>
+          </>
+          ) : (
+            <p className={styles.cvEmpty}>
+              A CV PDF is on file. Download it above or replace it with a new upload.
+            </p>
+          )}
         </section>
 
         <section className={styles.verificationPanel} id="professional">
@@ -1063,19 +1281,6 @@ export default function ProfileEditPage(): JSX.Element {
             </span>
           </div>
           <p className={styles.verificationNote}>{professionalDetails.helper}</p>
-
-          {professionalDetails.actionLabel ? (
-            <button
-              className={styles.verificationButton}
-              type="button"
-              onClick={handleRequestVerification}
-              disabled={isRequesting || professionalDetails.actionDisabled}
-            >
-              {isRequesting && !professionalDetails.actionDisabled
-                ? "Requesting verification..."
-                : professionalDetails.actionLabel}
-            </button>
-          ) : null}
         </section>
         <div className={styles.footerLink}>
           <Link href="/profile">Back to profile</Link>

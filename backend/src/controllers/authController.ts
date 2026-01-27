@@ -11,7 +11,10 @@ import {
   verifyEmailByToken
 } from "../repositories/authRepository";
 import { findLanguageByCode } from "../repositories/languageRepository";
+import { ensureDefaultMagazineForUser } from "../repositories/magazineRepository";
+import { findDefaultTopicId } from "../repositories/topicRepository";
 import { deleteUserById, findUserById } from "../repositories/userRepository";
+import { hasProfileCvByUserId } from "../repositories/profileCvRepository";
 import { getProfileByUserId } from "../repositories/userProfileRepository";
 import { pool } from "../db/pool";
 
@@ -97,6 +100,20 @@ export async function registerHandler(
       country,
       password_hash: passwordHash,
       email_verification_token: emailVerificationToken
+    });
+
+    const defaultTopicId = await findDefaultTopicId();
+    if (!defaultTopicId) {
+      res.status(500).json({ error: "Default topic not available" });
+      return;
+    }
+
+    await ensureDefaultMagazineForUser({
+      owner_user_id: user.id,
+      primary_topic_id: defaultTopicId,
+      primary_language_id: user.ui_language_id,
+      title: "Personal Magazine",
+      description: null
     });
 
     res.status(201).json({
@@ -350,11 +367,15 @@ export async function meHandler(
       return;
     }
 
-    const profile = await getProfileByUserId(userId);
+    const [profile, hasCv] = await Promise.all([
+      getProfileByUserId(userId),
+      hasProfileCvByUserId(userId)
+    ]);
 
     res.json({
       ...user,
       email_verified: credential.email_verified,
+      has_cv: hasCv,
       ...(profile
         ? {
             profile_image_url: profile.profile_image_url,

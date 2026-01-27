@@ -8,7 +8,9 @@ import styles from "./page.module.css";
 import { API_BASE_URL } from "../lib/api";
 import {
   type IdentityStatus,
-  isIdentityVerified
+  type ProfessionalStatus,
+  isIdentityVerified,
+  isProfessionalVerified
 } from "../lib/verification";
 
 type Magazine = {
@@ -18,6 +20,11 @@ type Magazine = {
   primary_topic_id: string;
   primary_language_id: string;
   owner_user_id: string;
+};
+
+type MagazinesResponse = {
+  magazines: Magazine[];
+  default_magazine_id: string | null;
 };
 
 type ArticleLifecycle = {
@@ -31,6 +38,7 @@ type MeResponse = {
   email_verified: boolean;
   account_status: "pending" | "active";
   identity_status: IdentityStatus;
+  professional_status?: ProfessionalStatus | null;
 };
 
 type MarkdownBlock =
@@ -227,6 +235,9 @@ export default function WritePage(): JSX.Element {
   const [articleStatus, setArticleStatus] = useState<
     ArticleLifecycle["status"] | null
   >(null);
+  const [professionalStatus, setProfessionalStatus] = useState<
+    ProfessionalStatus | null
+  >(null);
   const [loadingMagazines, setLoadingMagazines] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -276,6 +287,8 @@ export default function WritePage(): JSX.Element {
           return;
         }
 
+        setProfessionalStatus(me.professional_status ?? null);
+
         const profileResponse = await fetch(
           `${API_BASE_URL}/profiles/${me.id}`,
           { credentials: "include" }
@@ -311,12 +324,15 @@ export default function WritePage(): JSX.Element {
           const errorText = await parseErrorMessage(response);
           throw new Error(errorText);
         }
-        const data = (await response.json()) as Magazine[];
+        const data = (await response.json()) as MagazinesResponse;
         if (isActive) {
-          setMagazines(data);
-          if (!selectedMagazineId && data.length > 0) {
-            setSelectedMagazineId(data[0].id);
-          }
+          const magazinesList = Array.isArray(data.magazines) ? data.magazines : [];
+          setMagazines(magazinesList);
+          const defaultId =
+            data.default_magazine_id ??
+            magazinesList[0]?.id ??
+            "";
+          setSelectedMagazineId(defaultId);
         }
       } catch (error) {
         if (isActive) {
@@ -344,7 +360,7 @@ export default function WritePage(): JSX.Element {
     setErrorMessage(null);
 
     if (!selectedMagazineId) {
-      setErrorMessage("Select a magazine before saving a draft.");
+      setErrorMessage("Default magazine is not available.");
       return;
     }
     if (!title.trim()) {
@@ -359,11 +375,16 @@ export default function WritePage(): JSX.Element {
     setSavingDraft(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/magazines/${selectedMagazineId}/articles`,
+        `${API_BASE_URL}/articles`,
         {
           method: "POST",
           headers: buildHeaders(),
-          body: JSON.stringify({ title, body }),
+          body: JSON.stringify({
+            status: "draft",
+            article_id: articleId ?? undefined,
+            title,
+            body
+          }),
           credentials: "include"
         }
       );
@@ -374,7 +395,7 @@ export default function WritePage(): JSX.Element {
       const data = (await response.json()) as ArticleLifecycle;
       setArticleId(data.id);
       setArticleStatus(data.status);
-      setMessage("Draft saved. You can submit when ready.");
+      setMessage("Draft saved.");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to save draft"
@@ -409,7 +430,7 @@ export default function WritePage(): JSX.Element {
       }
       const data = (await response.json()) as ArticleLifecycle;
       setArticleStatus(data.status);
-      setMessage("Article submitted. You can publish once approved.");
+      setMessage("Submitted for review.");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to submit article"
@@ -444,7 +465,7 @@ export default function WritePage(): JSX.Element {
       }
       const data = (await response.json()) as ArticleLifecycle;
       setArticleStatus(data.status);
-      setMessage("Article published. It is now visible in the reader.");
+      router.push(`/articles/${data.id}`);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to publish article"
@@ -454,9 +475,29 @@ export default function WritePage(): JSX.Element {
     }
   }
 
-  const statusLabel = articleStatus
-    ? `Status: ${articleStatus}`
-    : "Status: draft not created";
+  const statusLabel = (() => {
+    switch (articleStatus) {
+      case "draft":
+        return "Draft saved";
+      case "submitted":
+        return "Submitted for review";
+      case "published":
+        return "Published";
+      case "rejected":
+        return "Changes requested";
+      case "archived":
+        return "Archived";
+      default:
+        return "Not saved yet";
+    }
+  })();
+
+  const isLocked = articleStatus === "submitted" || articleStatus === "published";
+  const isMagazineLocked = Boolean(selectedMagazineId);
+  const canPublish =
+    articleStatus === "submitted" &&
+    professionalStatus !== null &&
+    isProfessionalVerified(professionalStatus);
 
   if (checkingAuth) {
     return (
@@ -523,7 +564,7 @@ export default function WritePage(): JSX.Element {
               className={styles.select}
               value={selectedMagazineId}
               onChange={(event) => setSelectedMagazineId(event.target.value)}
-              disabled={loadingMagazines}
+              disabled={loadingMagazines || isLocked || isMagazineLocked}
             >
               {magazines.length === 0 ? (
                 <option value="">
@@ -554,6 +595,7 @@ export default function WritePage(): JSX.Element {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="A focused, long-form title"
+              disabled={isLocked}
             />
           </div>
 
@@ -568,6 +610,7 @@ export default function WritePage(): JSX.Element {
               onChange={(event) => setBody(event.target.value)}
               placeholder="Write in Markdown. Use headings, paragraphs, blockquotes, and lists."
               rows={18}
+              disabled={isLocked}
             />
           </div>
 
@@ -576,7 +619,7 @@ export default function WritePage(): JSX.Element {
               className={styles.primaryButton}
               type="button"
               onClick={handleSaveDraft}
-              disabled={savingDraft}
+              disabled={savingDraft || isLocked}
             >
               {savingDraft ? "Saving..." : "Save draft"}
             </button>
@@ -584,7 +627,7 @@ export default function WritePage(): JSX.Element {
               className={styles.secondaryButton}
               type="button"
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || articleStatus !== "draft"}
             >
               {submitting ? "Submitting..." : "Submit"}
             </button>
@@ -592,7 +635,7 @@ export default function WritePage(): JSX.Element {
               className={styles.secondaryButton}
               type="button"
               onClick={handlePublish}
-              disabled={publishing}
+              disabled={publishing || !canPublish}
             >
               {publishing ? "Publishing..." : "Publish"}
             </button>
@@ -600,7 +643,7 @@ export default function WritePage(): JSX.Element {
 
           <div className={styles.statusRow}>
             <span>{statusLabel}</span>
-            {articleId ? (
+            {articleStatus === "published" && articleId ? (
               <Link className={styles.previewLink} href={`/articles/${articleId}`}>
                 View published article
               </Link>

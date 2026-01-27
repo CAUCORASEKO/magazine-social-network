@@ -3,9 +3,10 @@ import type { Request, Response, NextFunction } from "express";
 import { findLanguageById } from "../repositories/languageRepository";
 import {
   createMagazine,
-  listActiveMagazines
+  ensureDefaultMagazineForUser,
+  listMagazinesByOwner
 } from "../repositories/magazineRepository";
-import { findTopicById } from "../repositories/topicRepository";
+import { findDefaultTopicId, findTopicById } from "../repositories/topicRepository";
 
 interface CreateMagazineBody {
   title?: string;
@@ -101,8 +102,22 @@ export async function listMagazinesHandler(
       return;
     }
 
-    const magazines = await listActiveMagazines();
-    res.json(magazines);
+    const defaultTopicId = await findDefaultTopicId();
+    if (!defaultTopicId) {
+      res.status(500).json({ error: "Default topic not available" });
+      return;
+    }
+
+    const defaultMagazine = await ensureDefaultMagazineForUser({
+      owner_user_id: req.user.id,
+      primary_topic_id: defaultTopicId,
+      primary_language_id: req.user.ui_language_id,
+      title: "Personal Magazine",
+      description: null
+    });
+
+    const magazines = await listMagazinesByOwner(req.user.id);
+    res.json({ magazines, default_magazine_id: defaultMagazine.id });
   } catch (error) {
     next(error);
   }
