@@ -12,6 +12,7 @@ import { magazinesRouter } from "./routes/magazines";
 import { profilesRouter } from "./routes/profiles";
 import { authRouter } from "./routes/auth";
 import { onboardingRouter } from "./routes/onboarding";
+import { messagesRouter } from "./routes/messages";
 
 export const app = express();
 
@@ -43,6 +44,7 @@ app.use(healthRouter);
 app.use(magazinesRouter);
 app.use(articlesRouter);
 app.use(profilesRouter);
+app.use(messagesRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);

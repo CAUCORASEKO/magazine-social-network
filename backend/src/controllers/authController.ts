@@ -155,7 +155,7 @@ export async function loginHandler(
       return;
     }
 
-    if (!credential.email_verified) {
+    if (!credential.email_verified && process.env.NODE_ENV !== "development") {
       res.status(403).json({ error: "Email is not verified" });
       return;
     }

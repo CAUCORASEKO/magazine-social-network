@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   getProfileByUserId,
   updateProfessionalVerificationStatus,
+  updateProfessionalCvUrl,
   updateProfileImageUrl,
   upsertUserProfileByUserId
 } from "../repositories/userProfileRepository";
@@ -66,6 +67,12 @@ export async function getPublicProfileHandler(
       return;
     }
 
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Public profile professional_cv_url", {
+        user_id: profile.user_id,
+        professional_cv_url: profile.professional_cv_url
+      });
+    }
     res.json(profile);
   } catch (error) {
     next(error);
@@ -779,10 +786,12 @@ export async function uploadProfileCvHandler(
     const relativePath = path.relative(uploadsRoot, file.path);
     const normalizedPath = relativePath.split(path.sep).join("/");
     const cvUrl = `/uploads/${normalizedPath}`;
+    const normalizedCvUrl = cvUrl.trim() ? cvUrl : null;
 
     let savedCv = await getProfileCvByUserId(req.user.id);
     let updatedHeadline = profile.headline;
     let updatedBio = profile.bio;
+    await updateProfessionalCvUrl(req.user.id, normalizedCvUrl);
 
     try {
       const text = await extractTextFromPdf(file.path);
@@ -820,11 +829,13 @@ export async function uploadProfileCvHandler(
     res.json({
       profile: {
         headline: updatedHeadline,
-        bio: updatedBio
+        bio: updatedBio,
+        professional_cv_url: normalizedCvUrl
       },
       cv: toApiCvResponse(savedCv),
       professional_status: verification.professional_status,
-      professional_verified_at: verification.professional_verified_at
+      professional_verified_at: verification.professional_verified_at,
+      professional_cv_url: normalizedCvUrl
     });
   } catch (error) {
     next(error);
@@ -849,6 +860,7 @@ export async function removeProfileCvHandler(
     }
 
     await removeLocalProfileCvFiles(req.user.id);
+    await updateProfessionalCvUrl(req.user.id, null);
     res.json({ success: true });
   } catch (error) {
     next(error);

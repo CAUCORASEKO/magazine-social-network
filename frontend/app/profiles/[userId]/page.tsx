@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 
 import styles from "./page.module.css";
 import { API_BASE_URL } from "../../lib/api";
@@ -9,6 +10,8 @@ import {
   PROFESSIONAL_STATUS
 } from "../../lib/verification";
 import CvModal from "./cv-modal";
+import MessageButton from "./message-button";
+import ViewToggle from "./view-toggle";
 
 interface PublicProfile {
   user_id: string;
@@ -119,8 +122,13 @@ async function fetchPublishedArticles(): Promise<PublishedArticleSummary[]> {
 }
 
 async function fetchMe(): Promise<MeResponse | null> {
+  const cookieStore = cookies();
+  const cookieHeader = cookieStore.toString();
   const response = await fetch(`${API_BASE_URL}/auth/me`, {
-    next: { revalidate: 10 },
+    headers: {
+      Cookie: cookieHeader
+    },
+    cache: "no-store",
     credentials: "include"
   });
 
@@ -319,15 +327,19 @@ function resolveProfileImageUrl(url: string | null): string | null {
 }
 
 export default async function ProfilePage({
-  params
+  params,
+  searchParams
 }: {
   params: { userId: string };
+  searchParams?: { view?: string };
 }): Promise<JSX.Element> {
   let profile: PublicProfile | null = null;
   let profileCv: PublicProfileCv | null = null;
   let me: MeResponse | null = null;
   let publishedArticles: PublishedArticleSummary[] = [];
   let errorMessage: string | null = null;
+  let hasPdfCv = false;
+  const isPublicView = searchParams?.view === "public";
 
   try {
     const [profileResult, articleResult, meResult] = await Promise.all([
@@ -340,12 +352,20 @@ export default async function ProfilePage({
     publishedArticles = articleResult.filter(
       (article) => article.author_user_id === params.userId
     );
-    if (profile && !profile.professional_cv_url) {
+    hasPdfCv = Boolean(
+      profile?.professional_cv_url && profile.professional_cv_url.trim() !== ""
+    );
+    if (profile && !hasPdfCv) {
       profileCv = await fetchPublicCv(params.userId);
     }
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "Unknown error";
   }
+
+  const isAuthenticated = Boolean(me?.id);
+  const isOwner = Boolean(me?.id && profile?.user_id && me.id === profile.user_id);
+  const showOwnerControls = isOwner && !isPublicView;
+  const canMessage = isAuthenticated && !isOwner && !isPublicView;
 
   return (
     <main className={styles.page}>
@@ -390,13 +410,43 @@ export default async function ProfilePage({
                 {profile.headline ? (
                   <p className={styles.headline}>{profile.headline}</p>
                 ) : null}
-                {me?.id === profile.user_id ? (
+                {(hasPdfCv || canMessage || isOwner) ? (
+                  <div className={styles.profileActions}>
+                    {hasPdfCv ? (
+                      <div className={styles.cvHeaderAction}>
+                        {resolveProfileImageUrl(profile.professional_cv_url) ? (
+                          <CvModal
+                            cvUrl={
+                              resolveProfileImageUrl(profile.professional_cv_url) ??
+                              ""
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {canMessage ? (
+                      <div className={styles.messageAction}>
+                        <MessageButton recipientUserId={profile.user_id} />
+                      </div>
+                    ) : null}
+                    {isOwner ? (
+                      <ViewToggle
+                        isPublicView={isPublicView}
+                        profileUserId={profile.user_id}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+                {showOwnerControls ? (
                   <div className={styles.ownerActions}>
                     <Link className={styles.ownerLink} href="/profile/edit">
                       Edit profile
                     </Link>
                     <Link className={styles.ownerLink} href="/profile/edit#professional">
                       Edit professional background
+                    </Link>
+                    <Link className={styles.ownerMessages} href="/messages">
+                      Messages
                     </Link>
                   </div>
                 ) : null}
@@ -498,16 +548,7 @@ export default async function ProfilePage({
               </ul>
             </div>
           ) : null}
-          {profile.professional_cv_url ? (
-            <section className={styles.cvSection}>
-              <p className={styles.cvTitle}>CV</p>
-              {resolveProfileImageUrl(profile.professional_cv_url) ? (
-                <CvModal
-                  cvUrl={resolveProfileImageUrl(profile.professional_cv_url) ?? ""}
-                />
-              ) : null}
-            </section>
-          ) : (
+          {!hasPdfCv ? (
             <section className={styles.cvSection}>
               <p className={styles.cvTitle}>Professional background</p>
               {profileCv?.experience.length ? (
@@ -610,7 +651,7 @@ export default async function ProfilePage({
                 </div>
               ) : null}
             </section>
-          )}
+          ) : null}
           <div className={styles.articles}>
             <p className={styles.articlesTitle}>Published articles</p>
             {publishedArticles.length === 0 ? (

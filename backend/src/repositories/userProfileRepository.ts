@@ -17,6 +17,7 @@ export interface PublicUserProfile {
   professional_status: ProfessionalStatus;
   professional_score: number | null;
   professional_verified_at: string | null;
+  professional_cv_url: string | null;
 }
 
 export interface ProfileDetail {
@@ -31,6 +32,7 @@ export interface ProfileDetail {
   professional_status: ProfessionalStatus;
   professional_score: number | null;
   professional_verified_at: string | null;
+  professional_cv_url: string | null;
 }
 
 export interface UpsertUserProfileInput {
@@ -63,6 +65,11 @@ export interface ProfilePhotoRecord {
   profile_image_url: string | null;
 }
 
+export interface ProfessionalCvRecord {
+  user_id: string;
+  professional_cv_url: string | null;
+}
+
 /**
  * Perfil público (para /profiles/:userId)
  */
@@ -82,7 +89,8 @@ export async function getPublicProfileByUserId(
       up.visibility,
       up.professional_status,
       up.professional_score,
-      up.professional_verified_at
+      up.professional_verified_at,
+      up.professional_cv_url
     FROM users u
     JOIN user_profiles up
       ON up.user_id = u.id
@@ -114,7 +122,8 @@ export async function getProfileByUserId(
       up.visibility,
       up.professional_status,
       up.professional_score,
-      up.professional_verified_at
+      up.professional_verified_at,
+      up.professional_cv_url
     FROM user_profiles up
     JOIN users u
       ON u.id = up.user_id
@@ -243,6 +252,24 @@ export async function updateProfileImageUrl(
     RETURNING user_id, profile_image_url
     `,
     [userId, profileImageUrl]
+  );
+
+  return result.rows[0];
+}
+
+export async function updateProfessionalCvUrl(
+  userId: string,
+  professionalCvUrl: string | null
+): Promise<ProfessionalCvRecord> {
+  const result = await pool.query<ProfessionalCvRecord>(
+    `
+    UPDATE user_profiles
+    SET professional_cv_url = $2,
+        updated_at = now()
+    WHERE user_id = $1
+    RETURNING user_id, professional_cv_url
+    `,
+    [userId, professionalCvUrl]
   );
 
   return result.rows[0];
