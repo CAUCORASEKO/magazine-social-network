@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { requireAuth } from "../middleware/requireAuth";
 import {
+  clearConversationHandler,
+  deleteMessageHandler,
   getConversationMessagesHandler,
   listInboxHandler,
   sendMessageHandler,
@@ -18,3 +20,9 @@ messagesRouter.get(
   getConversationMessagesHandler
 );
 messagesRouter.post("/messages/:conversationId", requireAuth, sendMessageHandler);
+messagesRouter.delete("/messages/:messageId", requireAuth, deleteMessageHandler);
+messagesRouter.post(
+  "/messages/:conversationId/clear",
+  requireAuth,
+  clearConversationHandler
+);

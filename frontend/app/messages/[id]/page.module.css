@@ -1,26 +1,35 @@
 .page {
-  padding: 2.8rem clamp(1.5rem, 5vw, 4.5rem) 4rem;
+  height: calc(100vh - 6.5rem);
+  padding: 2.8rem clamp(1.5rem, 5vw, 4.5rem) 2.2rem;
   max-width: 78rem;
   margin: 0 auto;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: row;
   gap: 1.6rem;
-  align-items: start;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .sidebar {
-  position: sticky;
-  top: 2rem;
-  height: calc(100vh - 4rem);
+  height: 100%;
+  flex: 0 0 320px;
+  min-width: 240px;
+  max-width: 320px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .sidebarHeader {
@@ -148,17 +157,27 @@
   background: rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
-  min-height: 24rem;
+  min-height: 0;
   overflow: hidden;
+  height: 100%;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .header {
   padding: 1.2rem 1.6rem;
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.95);
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .headerMain {
@@ -184,6 +203,11 @@
   font-size: 0.9rem;
 }
 
+.headerActions {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .avatar {
   width: 3rem;
   height: 3rem;
@@ -206,13 +230,16 @@
 }
 
 .thread {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1rem 1.6rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  background: #fafafa;
+  box-sizing: border-box;
 }
 
 .messageList {
@@ -247,7 +274,9 @@
   flex-direction: column;
   gap: 0.35rem;
   max-width: 75%;
+  position: relative;
 }
+
 
 .messageMine {
   align-self: flex-end;
@@ -256,6 +285,84 @@
 
 .messageTheirs {
   align-self: flex-start;
+}
+
+.messageMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.messageMenu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.menuButton {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  background: rgba(47, 93, 80, 0.12);
+  color: #1f3b32;
+}
+
+.menuButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menuList {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 9rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 3;
+}
+
+.messageMine .menuList {
+  right: 0;
+}
+
+.messageTheirs .menuList {
+  left: 0;
+  right: auto;
+}
+
+.menuItem {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: rgba(47, 93, 80, 0.12);
+}
+
+.menuItem:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .messageBubble {
@@ -285,16 +392,19 @@
   color: var(--muted);
 }
 
+
 .composer {
-  position: sticky;
-  bottom: 0;
   display: flex;
   gap: 0.8rem;
   align-items: flex-end;
   padding: 0.9rem 1.2rem;
   border-top: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.97);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  position: relative;
 }
+
 
 .textarea {
   flex: 1;
@@ -330,15 +440,25 @@
 
 @media (max-width: 900px) {
   .layout {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    height: 100%;
   }
 
   .sidebar {
-    position: static;
-    height: auto;
+    height: 100%;
+    max-height: 35vh;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 
   .conversationPanel {
-    min-height: 18rem;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    height: calc(100vh - 9rem);
   }
 }

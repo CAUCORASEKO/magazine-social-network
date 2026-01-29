@@ -4,7 +4,10 @@ import { findUserById } from "../repositories/userRepository";
 import {
   createConversation,
   createMessage,
+  deleteMessageForUser,
+  findMessageInConversation,
   findConversationByUsers,
+  clearConversationForUser,
   getConversationForUser,
   getConversationPeer,
   listInboxForUser,
@@ -18,6 +21,7 @@ interface StartMessageBody {
 
 interface SendMessageBody {
   message?: unknown;
+  replyToMessageId?: unknown;
 }
 
 export async function startConversationHandler(
@@ -56,8 +60,10 @@ export async function startConversationHandler(
     }
 
     const message = typeof body.message === "string" ? body.message.trim() : "";
+    const replyToMessageId =
+      typeof body.replyToMessageId === "string" ? body.replyToMessageId.trim() : "";
     if (message) {
-      await createMessage(conversation.id, req.user.id, message);
+      await createMessage(conversation.id, req.user.id, message, null);
     }
 
     res.status(201).json({ conversationId: conversation.id });
@@ -98,7 +104,8 @@ export async function listInboxHandler(
         last_message: item.last_message_body
           ? {
               body: item.last_message_body,
-              created_at: item.last_message_at
+              created_at: item.last_message_at,
+              sender_id: item.last_message_sender_id
             }
           : null,
         created_at: item.conversation_created_at
@@ -137,7 +144,7 @@ export async function getConversationMessagesHandler(
     }
 
     const [messages, peer] = await Promise.all([
-      listMessagesByConversation(conversationId),
+      listMessagesByConversation(conversationId, req.user.id),
       getConversationPeer(conversationId, req.user.id)
     ]);
 
@@ -187,8 +194,93 @@ export async function sendMessageHandler(
       return;
     }
 
-    const created = await createMessage(conversationId, req.user.id, message);
+    if (replyToMessageId) {
+      const target = await findMessageInConversation(
+        replyToMessageId,
+        conversationId
+      );
+      if (!target) {
+        res.status(400).json({ error: "Reply target not found" });
+        return;
+      }
+    }
+
+    const created = await createMessage(
+      conversationId,
+      req.user.id,
+      message,
+      replyToMessageId || null
+    );
     res.status(201).json(created);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteMessageHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messageId =
+      typeof req.params.messageId === "string" ? req.params.messageId.trim() : "";
+
+    if (!messageId) {
+      res.status(400).json({ error: "Message id is required" });
+      return;
+    }
+
+    const result = await deleteMessageForUser(messageId, req.user.id);
+    if (!result) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function clearConversationHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const conversationId =
+      typeof req.params.conversationId === "string"
+        ? req.params.conversationId.trim()
+        : "";
+
+    if (!conversationId) {
+      res.status(400).json({ error: "Conversation id is required" });
+      return;
+    }
+
+    const conversation = await getConversationForUser(conversationId, req.user.id);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const clearedCount = await clearConversationForUser(
+      conversationId,
+      req.user.id
+    );
+
+    res.json({ cleared: clearedCount });
   } catch (error) {
     next(error);
   }

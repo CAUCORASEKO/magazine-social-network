@@ -160,7 +160,10 @@ export default function ConversationPage({
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const loadMessages = useCallback(async () => {
@@ -222,7 +225,38 @@ export default function ConversationPage({
     };
   }, [loadInbox, loadMessages]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent): void {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+      if (
+        target.closest("[data-menu-root='message']") ||
+        target.closest("[data-menu-root='header']")
+      ) {
+        return;
+      }
+      setOpenMessageMenuId(null);
+      setIsHeaderMenuOpen(false);
+    }
+
+    document.addEventListener("click", handleClick);
+    return () => {
+      document.removeEventListener("click", handleClick);
+    };
+  }, []);
+
   const formattedMessages = useMemo(() => messages, [messages]);
+
 
   const threadItems = useMemo((): ThreadItem[] => {
     const items: ThreadItem[] = [];
@@ -252,6 +286,7 @@ export default function ConversationPage({
     bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [formattedMessages]);
 
+
   async function handleSend(): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -277,6 +312,58 @@ export default function ConversationPage({
       setError(err instanceof Error ? err.message : "Unable to send message");
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function handleDeleteMessage(messageId: string): Promise<void> {
+    setOpenMessageMenuId(null);
+    setMessages((prev) => prev.filter((message) => message.id !== messageId));
+    try {
+      const response = await fetch(`${API_BASE_URL}/messages/${messageId}`, {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store"
+      });
+      if (!response.ok && response.status !== 204) {
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(data?.error || "Unable to delete message");
+      }
+      await loadInbox();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete message");
+      await loadMessages();
+      await loadInbox();
+    }
+  }
+
+  async function handleClearConversation(): Promise<void> {
+    setIsHeaderMenuOpen(false);
+    setIsClearing(true);
+    setMessages([]);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/messages/${conversationId}/clear`,
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store"
+        }
+      );
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(data?.error || "Unable to clear conversation");
+      }
+      await loadInbox();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to clear conversation");
+      await loadMessages();
+      await loadInbox();
+    } finally {
+      setIsClearing(false);
     }
   }
 
@@ -352,26 +439,56 @@ export default function ConversationPage({
 
         <section className={styles.conversationPanel}>
           <div className={styles.header}>
-            <div className={styles.headerMain}>
-              <div className={styles.avatar}>
-                {peer?.profile_image_url ? (
-                  <img
-                    src={
-                      peer.profile_image_url.startsWith("/")
-                        ? `${API_BASE_URL}${peer.profile_image_url}`
-                        : peer.profile_image_url
-                    }
-                    alt={`${peer.full_name} avatar`}
-                  />
-                ) : (
-                  <span>{peer ? getInitials(peer.full_name) : "—"}</span>
-                )}
+            <div className={styles.headerRow}>
+              <div className={styles.headerMain}>
+                <div className={styles.avatar}>
+                  {peer?.profile_image_url ? (
+                    <img
+                      src={
+                        peer.profile_image_url.startsWith("/")
+                          ? `${API_BASE_URL}${peer.profile_image_url}`
+                          : peer.profile_image_url
+                      }
+                      alt={`${peer.full_name} avatar`}
+                    />
+                  ) : (
+                    <span>{peer ? getInitials(peer.full_name) : "—"}</span>
+                  )}
+                </div>
+                <div className={styles.headerText}>
+                  <h1 className={styles.title}>
+                    {peer?.full_name ?? "Conversation"}
+                  </h1>
+                  <p className={styles.subtitle}>Private conversation</p>
+                </div>
               </div>
-              <div className={styles.headerText}>
-                <h1 className={styles.title}>
-                  {peer?.full_name ?? "Conversation"}
-                </h1>
-                <p className={styles.subtitle}>Private conversation</p>
+              <div className={styles.headerActions} data-menu-root="header">
+                <button
+                  type="button"
+                  className={styles.menuButton}
+                  aria-haspopup="menu"
+                  aria-expanded={isHeaderMenuOpen}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsHeaderMenuOpen((prev) => !prev);
+                    setOpenMessageMenuId(null);
+                  }}
+                  disabled={isClearing}
+                >
+                  ⋯
+                </button>
+                {isHeaderMenuOpen ? (
+                  <div className={styles.menuList} role="menu">
+                    <button
+                      type="button"
+                      className={styles.menuItem}
+                      onClick={handleClearConversation}
+                      disabled={isClearing}
+                    >
+                      Clear conversation
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -411,9 +528,42 @@ export default function ConversationPage({
                           isMine ? styles.messageMine : styles.messageTheirs
                         }`}
                       >
-                        <span className={styles.messageAuthor}>
-                          {isMine ? "You" : peer?.full_name ?? "Unknown"}
-                        </span>
+                        <div className={styles.messageMeta}>
+                          <span className={styles.messageAuthor}>
+                            {isMine ? "You" : peer?.full_name ?? "Unknown"}
+                          </span>
+                          <div
+                            className={styles.messageMenu}
+                            data-menu-root="message"
+                          >
+                            <button
+                              type="button"
+                              className={styles.menuButton}
+                              aria-haspopup="menu"
+                              aria-expanded={openMessageMenuId === message.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenMessageMenuId((current) =>
+                                  current === message.id ? null : message.id
+                                );
+                                setIsHeaderMenuOpen(false);
+                              }}
+                            >
+                              ⋯
+                            </button>
+                            {openMessageMenuId === message.id ? (
+                              <div className={styles.menuList} role="menu">
+                                <button
+                                  type="button"
+                                  className={styles.menuItem}
+                                  onClick={() => handleDeleteMessage(message.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
                         <div className={styles.messageBubble}>{message.body}</div>
                         <span className={styles.messageTime}>
                           {formatTime(message.created_at)}
