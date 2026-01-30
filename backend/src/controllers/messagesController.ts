@@ -22,6 +22,7 @@ interface StartMessageBody {
 interface SendMessageBody {
   message?: unknown;
   replyToMessageId?: unknown;
+  reply_to_message_id?: unknown;
 }
 
 export async function startConversationHandler(
@@ -182,6 +183,12 @@ export async function sendMessageHandler(
 
     const body = req.body as SendMessageBody;
     const message = typeof body.message === "string" ? body.message.trim() : "";
+    const replyToMessageId =
+      typeof body.reply_to_message_id === "string"
+        ? body.reply_to_message_id.trim()
+        : typeof body.replyToMessageId === "string"
+        ? body.replyToMessageId.trim()
+        : "";
 
     if (!message) {
       res.status(400).json({ error: "Message is required" });

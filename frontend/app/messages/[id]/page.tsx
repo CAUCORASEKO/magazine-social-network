@@ -12,6 +12,12 @@ interface MessageItem {
   sender_id: string;
   body: string;
   created_at: string;
+  reply_to: {
+    id: string;
+    body: string;
+    sender_id: string;
+    created_at: string;
+  } | null;
 }
 
 interface ConversationPeer {
@@ -146,6 +152,12 @@ type ThreadItem =
   | { type: "separator"; id: string; label: string }
   | { type: "message"; message: MessageItem };
 
+type ReplyDraft = {
+  id: string;
+  author_name: string;
+  body: string;
+};
+
 export default function ConversationPage({
   params
 }: {
@@ -164,7 +176,13 @@ export default function ConversationPage({
   const [isLoading, setIsLoading] = useState(true);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [replyToMessage, setReplyToMessage] = useState<ReplyDraft | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledRef = useRef(false);
+  const shouldScrollOnNextUpdateRef = useRef(false);
+  const isAutoScrollingRef = useRef(false);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -226,6 +244,12 @@ export default function ConversationPage({
   }, [loadInbox, loadMessages]);
 
   useEffect(() => {
+    hasAutoScrolledRef.current = false;
+    setIsAtBottom(true);
+    setReplyToMessage(null);
+  }, [conversationId]);
+
+  useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -279,12 +303,46 @@ export default function ConversationPage({
     return items;
   }, [formattedMessages]);
 
-  useEffect(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
     if (!bottomRef.current) {
       return;
     }
-    bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [formattedMessages]);
+    isAutoScrollingRef.current = true;
+    bottomRef.current.scrollIntoView({ behavior, block: "end" });
+    requestAnimationFrame(() => {
+      isAutoScrollingRef.current = false;
+    });
+  }, []);
+
+  const handleThreadScroll = useCallback(() => {
+    if (!threadRef.current || isAutoScrollingRef.current) {
+      return;
+    }
+    const { scrollHeight, scrollTop, clientHeight } = threadRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setIsAtBottom(distanceFromBottom <= 40);
+  }, []);
+
+  useEffect(() => {
+    if (!threadRef.current || !bottomRef.current) {
+      return;
+    }
+    if (!hasAutoScrolledRef.current) {
+      scrollToBottom("auto");
+      hasAutoScrolledRef.current = true;
+      setIsAtBottom(true);
+      return;
+    }
+    if (shouldScrollOnNextUpdateRef.current) {
+      scrollToBottom("smooth");
+      shouldScrollOnNextUpdateRef.current = false;
+      setIsAtBottom(true);
+      return;
+    }
+    if (isAtBottom) {
+      scrollToBottom("smooth");
+    }
+  }, [formattedMessages, isAtBottom, scrollToBottom]);
 
 
   async function handleSend(): Promise<void> {
@@ -294,18 +352,26 @@ export default function ConversationPage({
     }
     setIsSending(true);
     try {
+      const payload: { message: string; reply_to_message_id?: string } = {
+        message: trimmed
+      };
+      if (replyToMessage?.id) {
+        payload.reply_to_message_id = replyToMessage.id;
+      }
       const response = await fetch(`${API_BASE_URL}/messages/${conversationId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         cache: "no-store",
-        body: JSON.stringify({ message: trimmed })
+        body: JSON.stringify(payload)
       });
       if (!response.ok) {
         const data = (await response.json()) as { error?: string };
         throw new Error(data?.error || "Unable to send message");
       }
       setText("");
+      setReplyToMessage(null);
+      shouldScrollOnNextUpdateRef.current = true;
       await loadMessages();
       await loadInbox();
     } catch (err) {
@@ -503,7 +569,7 @@ export default function ConversationPage({
 
           {!error ? (
             <>
-              <div className={styles.thread}>
+              <div className={styles.thread} ref={threadRef} onScroll={handleThreadScroll}>
                 {isLoading ? (
                   <p className={styles.emptyState}>Loading messages…</p>
                 ) : null}
@@ -521,6 +587,11 @@ export default function ConversationPage({
                     }
                     const message = item.message;
                     const isMine = meId && message.sender_id === meId;
+                    const authorName = isMine ? "You" : peer?.full_name ?? "Unknown";
+                    const replyAuthor =
+                      message.reply_to?.sender_id === meId
+                        ? "You"
+                        : peer?.full_name ?? "Unknown";
                     return (
                       <li
                         key={message.id}
@@ -530,7 +601,7 @@ export default function ConversationPage({
                       >
                         <div className={styles.messageMeta}>
                           <span className={styles.messageAuthor}>
-                            {isMine ? "You" : peer?.full_name ?? "Unknown"}
+                            {authorName}
                           </span>
                           <div
                             className={styles.messageMenu}
@@ -556,6 +627,20 @@ export default function ConversationPage({
                                 <button
                                   type="button"
                                   className={styles.menuItem}
+                                  onClick={() => {
+                                    setReplyToMessage({
+                                      id: message.id,
+                                      author_name: authorName,
+                                      body: message.body
+                                    });
+                                    setOpenMessageMenuId(null);
+                                  }}
+                                >
+                                  Reply
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.menuItem}
                                   onClick={() => handleDeleteMessage(message.id)}
                                 >
                                   Delete
@@ -564,6 +649,16 @@ export default function ConversationPage({
                             ) : null}
                           </div>
                         </div>
+                        {message.reply_to ? (
+                          <div className={styles.replyQuote}>
+                            <span className={styles.replyQuoteAuthor}>
+                              {replyAuthor}
+                            </span>
+                            <span className={styles.replyQuoteBody}>
+                              {message.reply_to.body}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className={styles.messageBubble}>{message.body}</div>
                         <span className={styles.messageTime}>
                           {formatTime(message.created_at)}
@@ -576,6 +671,24 @@ export default function ConversationPage({
               </div>
 
               <div className={styles.composer}>
+                {replyToMessage ? (
+                  <div className={styles.replyPreview}>
+                    <div className={styles.replyPreviewHeader}>
+                      <span>Replying to {replyToMessage.author_name}</span>
+                      <button
+                        type="button"
+                        className={styles.replyCancel}
+                        onClick={() => setReplyToMessage(null)}
+                        aria-label="Cancel reply"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className={styles.replyPreviewBody}>
+                      {replyToMessage.body}
+                    </p>
+                  </div>
+                ) : null}
                 <textarea
                   className={styles.textarea}
                   rows={2}
