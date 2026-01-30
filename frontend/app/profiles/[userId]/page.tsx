@@ -373,9 +373,11 @@ export default async function ProfilePage({
         <Link className={styles.backLink} href="/">
           Back to feed
         </Link>
-        <Link className={styles.settingsLink} href="/profile/settings">
-          Settings
-        </Link>
+        {showOwnerControls ? (
+          <Link className={styles.settingsLink} href="/profile/settings">
+            Settings
+          </Link>
+        ) : null}
       </div>
 
       {errorMessage ? (
@@ -455,6 +457,7 @@ export default async function ProfilePage({
                     const badge = getIdentityBadge(profile.identity_status);
                     const isVerified =
                       profile.identity_status === IDENTITY_STATUS.VERIFIED;
+                    const isInteractive = showOwnerControls && !isVerified;
                     const className = `${styles.badge} ${
                       isVerified ? styles.badgeSolid : styles.badgeOutline
                     } ${
@@ -465,8 +468,8 @@ export default async function ProfilePage({
                         : badge.tone === "rejected"
                         ? styles.badgeRejected
                         : styles.badgeMuted
-                    } ${isVerified ? styles.badgeStatic : styles.badgeLink}`;
-                    if (isVerified) {
+                    } ${isInteractive ? styles.badgeLink : styles.badgeStatic}`;
+                    if (!isInteractive) {
                       return (
                         <span className={className} title={badge.tooltip}>
                           <span className={styles.badgeIcon}>
@@ -494,6 +497,7 @@ export default async function ProfilePage({
                     const isVerified =
                       profile.professional_status ===
                       PROFESSIONAL_STATUS.AI_VERIFIED;
+                    const isInteractive = showOwnerControls && !isVerified;
                     const className = `${styles.badge} ${
                       isVerified ? styles.badgeSolid : styles.badgeOutline
                     } ${
@@ -504,8 +508,8 @@ export default async function ProfilePage({
                         : badge.tone === "rejected"
                         ? styles.badgeRejected
                         : styles.badgeMuted
-                    } ${isVerified ? styles.badgeStatic : styles.badgeLink}`;
-                    if (isVerified) {
+                    } ${isInteractive ? styles.badgeLink : styles.badgeStatic}`;
+                    if (!isInteractive) {
                       return (
                         <span className={className} title={badge.tooltip}>
                           <span className={styles.badgeIcon}>

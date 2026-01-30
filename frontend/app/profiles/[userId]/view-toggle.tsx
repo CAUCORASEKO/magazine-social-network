@@ -25,7 +25,7 @@ export default function ViewToggle({
 
   return (
     <button className={styles.viewToggle} type="button" onClick={handleClick}>
-      {isPublicView ? "Volver a mi vista" : "Ver como visitante"}
+      {isPublicView ? "Back to my view" : "View as visitor"}
     </button>
   );
 }
