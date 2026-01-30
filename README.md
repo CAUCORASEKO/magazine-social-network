@@ -47,6 +47,15 @@ Public profiles present verified identity signals alongside long-form work.
 
 Clear account controls keep privacy, verification, and session management explicit.
 
+### Private messaging
+
+![Chat conversation](docs/images/chat-conversation.png)
+
+Private, one-to-one, professional, inbox-style messaging with full message history.
+Conversations use a scrollable panel with a fixed composer and per-message actions
+for reply and delete. The system is intentionally not social: no public comments,
+no reactions, no engagement metrics, and no algorithmic feeds.
+
 ## Current Scope (MVP)
 
 - Node.js + TypeScript API with PostgreSQL storage
@@ -56,13 +65,16 @@ Clear account controls keep privacy, verification, and session management explic
 - Public read endpoints for articles and public profiles
 - Minimal Next.js read-only reader UI for feed, article, and public profile pages
 - Session-based authentication with email verification
+- Private one-to-one messaging between verified users
 - Seeded languages and topics for filtering
 
 ## Explicitly Out of Scope
 
 - Authentication providers or production auth
 - Social graph, likes, reactions, or algorithmic feeds
-- Comments, messaging, or notifications
+- Public comments or discussion threads
+- Group messaging or channels
+- Notifications or real-time presence indicators
 - Media uploads (images, video, audio, embeds)
 - Monetization, subscriptions, or payments
 - Organization accounts or multi-author ownership
