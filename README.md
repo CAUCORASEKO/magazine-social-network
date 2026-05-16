@@ -179,3 +179,4 @@ Required environment variables:
 - Foundation complete
 - Read-only MVP (by design)
 - Ready for evaluation and iteration
+Note: Repository update tested through AgentDock mobile workflow.
